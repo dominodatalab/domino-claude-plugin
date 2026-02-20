@@ -1,0 +1,75 @@
+"""
+Domino Dash Application Template
+"""
+
+import os
+from dash import Dash, html, dcc, callback, Input, Output
+import requests
+
+# Initialize Dash app
+app = Dash(__name__)
+
+# Layout
+app.layout = html.Div([
+    html.H1("Domino Dash App"),
+
+    # Environment info
+    html.Div([
+        html.P(f"Project: {os.environ.get('DOMINO_PROJECT_NAME', 'N/A')}"),
+        html.P(f"User: {os.environ.get('DOMINO_STARTING_USERNAME', 'N/A')}"),
+    ], style={'color': 'gray', 'fontSize': '12px'}),
+
+    html.Hr(),
+
+    # Input section
+    html.Div([
+        html.Label("Feature 1:"),
+        dcc.Input(id='feature1', type='number', value=0),
+
+        html.Label("Feature 2:"),
+        dcc.Input(id='feature2', type='number', value=0),
+
+        html.Button('Predict', id='predict-btn', n_clicks=0),
+    ]),
+
+    # Output section
+    html.Div(id='prediction-output', style={'marginTop': '20px'}),
+])
+
+
+@callback(
+    Output('prediction-output', 'children'),
+    Input('predict-btn', 'n_clicks'),
+    Input('feature1', 'value'),
+    Input('feature2', 'value'),
+    prevent_initial_call=True
+)
+def predict(n_clicks, feature1, feature2):
+    """Call Domino Model API endpoint."""
+    model_url = os.environ.get('MODEL_API_URL')
+    model_token = os.environ.get('MODEL_API_TOKEN')
+
+    if not model_url or not model_token:
+        return html.P("Model API not configured", style={'color': 'red'})
+
+    try:
+        response = requests.post(
+            model_url,
+            headers={
+                'Authorization': f'Bearer {model_token}',
+                'Content-Type': 'application/json'
+            },
+            json={'data': {'feature1': feature1, 'feature2': feature2}}
+        )
+        return html.Pre(str(response.json()))
+    except Exception as e:
+        return html.P(f"Error: {str(e)}", style={'color': 'red'})
+
+
+if __name__ == '__main__':
+    # CRITICAL: Bind to 0.0.0.0:8888 for Domino
+    app.run_server(
+        host='0.0.0.0',
+        port=8888,
+        debug=False
+    )

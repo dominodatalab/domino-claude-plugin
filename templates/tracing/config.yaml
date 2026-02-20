@@ -1,0 +1,66 @@
+# Domino GenAI Agent Configuration
+# Used with: DominoRun(agent_config_path="config.yaml")
+#
+# This configuration is logged as MLflow parameters for reproducibility.
+# You can recreate any run by checking its parameters in the Domino UI.
+
+# LLM Models
+models:
+  # Primary model for agent operations
+  primary: gpt-4o-mini
+
+  # Fallback model if primary fails
+  fallback: gpt-3.5-turbo
+
+  # Model for LLM-as-judge evaluation
+  judge: gpt-4o
+
+# Agent Configurations
+agents:
+  # Default settings for all agents
+  default:
+    temperature: 0.7
+    max_tokens: 1000
+    timeout_seconds: 30
+
+  # Classifier agent settings
+  classifier:
+    temperature: 0.3
+    max_tokens: 500
+    system_prompt: "You are a classifier. Categorize inputs accurately."
+
+  # Response generator settings
+  responder:
+    temperature: 0.7
+    max_tokens: 1500
+    system_prompt: "You are a helpful assistant. Provide clear, accurate responses."
+
+  # Evaluator agent settings
+  evaluator:
+    temperature: 0.1
+    max_tokens: 100
+    system_prompt: "You are an evaluator. Rate responses objectively."
+
+# Evaluation Settings
+evaluation:
+  # Enable LLM-as-judge evaluation
+  enable_llm_judge: true
+
+  # Quality thresholds
+  thresholds:
+    minimum_quality: 0.7
+    minimum_confidence: 0.8
+
+# Operational Settings
+settings:
+  # Number of retries on failure
+  retry_count: 3
+
+  # Request timeout in seconds
+  timeout_seconds: 30
+
+  # Batch processing size
+  batch_size: 10
+
+  # Enable verbose logging
+  verbose: false
