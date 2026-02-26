@@ -18,32 +18,187 @@ This plugin enables Claude Code to help you with all aspects of Domino Data Lab,
 
 ## Installation
 
-### Option 1: Clone the Repository
+### Prerequisites
+
+- **Claude Code CLI** v1.0.33 or later (`claude --version` to check)
+- Access to a Domino Data Lab instance
+- Domino API key (for API operations)
+
+---
+
+### Option 1: Marketplace Install (Recommended)
+
+This approach registers the plugin through Claude Code's native marketplace system so it persists across sessions.
+
+**Step 1: Clone the repository and create a marketplace wrapper**
 
 ```bash
 # Clone the plugin
-git clone https://github.com/jvdomino/domino-data-lab-plugin.git
+git clone https://github.com/dominodatalab/domino-claude-plugin.git
 
-# Run Claude Code with the plugin
-claude --plugin-dir /path/to/domino-data-lab-plugin
+# Create the marketplace directory structure
+mkdir -p ~/.claude/marketplaces/domino/.claude-plugin
+mkdir -p ~/.claude/marketplaces/domino/plugins
+
+# Move the plugin into the marketplace
+mv domino-claude-plugin ~/.claude/marketplaces/domino/plugins/domino-claude-plugin
 ```
 
-### Option 2: Add to Claude Code Settings
+**Step 2: Create the marketplace manifest**
 
-Add the plugin path to your Claude Code configuration file (`~/.claude/settings.json`):
+```bash
+cat > ~/.claude/marketplaces/domino/.claude-plugin/marketplace.json << 'EOF'
+{
+  "name": "domino-marketplace",
+  "owner": {
+    "name": "Domino Data Lab",
+    "email": "support@dominodatalab.com"
+  },
+  "plugins": [
+    {
+      "name": "domino-claude-plugin",
+      "description": "Domino Data Lab plugin for Claude Code - workspaces, jobs, environments, datasets, apps, models, and more",
+      "version": "1.0.0",
+      "source": "./plugins/domino-claude-plugin",
+      "category": "development"
+    }
+  ]
+}
+EOF
+```
+
+**Step 3: Register the marketplace and install the plugin**
+
+Launch Claude Code and run:
+
+```
+/plugin marketplace add /home/<your-username>/.claude/marketplaces/domino
+/plugin install domino-claude-plugin@domino-marketplace
+```
+
+> **Note:** Replace `<your-username>` with your actual username, or use the full absolute path (e.g., `/home/ubuntu/.claude/marketplaces/domino`). The `~` shorthand may not expand correctly.
+
+**Step 4: Restart Claude Code**
+
+```
+/exit
+claude
+```
+
+The plugin should appear in your loaded plugins on startup. Verify with:
+
+```
+/plugin
+```
+
+Navigate to the **Installed** tab to confirm `domino-claude-plugin` is listed.
+
+---
+
+### Option 2: Direct Plugin Directory (Development / Quick Start)
+
+Use the `--plugin-dir` flag to load the plugin directly. This is ideal for development, testing, or quick evaluation.
+
+```bash
+# Clone the plugin
+git clone https://github.com/dominodatalab/domino-claude-plugin.git
+
+# Ensure the plugin manifest exists
+mkdir -p domino-claude-plugin/.claude-plugin
+cat > domino-claude-plugin/.claude-plugin/plugin.json << 'EOF'
+{
+  "name": "domino-claude-plugin",
+  "description": "Domino Data Lab plugin for Claude Code",
+  "version": "1.0.0"
+}
+EOF
+
+# Run Claude Code with the plugin
+claude --plugin-dir ./domino-claude-plugin
+```
+
+To make this persistent without the marketplace approach, add a shell alias:
+
+```bash
+echo 'alias claude="claude --plugin-dir /path/to/domino-claude-plugin"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+---
+
+### Option 3: Team / Project-Level Install
+
+For teams sharing a project, add the marketplace to your project's `.claude/settings.json`:
 
 ```json
 {
-  "plugins": [
-    "/path/to/domino-data-lab-plugin"
-  ]
+  "extraKnownMarketplaces": {
+    "domino-marketplace": {
+      "source": {
+        "source": "directory",
+        "path": "/path/to/domino-marketplace"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "domino-claude-plugin@domino-marketplace": true
+  }
 }
 ```
 
-## Skills (18 Total)
+When team members trust the repository folder, Claude Code will prompt them to install the marketplace and plugin automatically.
+
+---
+
+## Verifying the Installation
+
+After installation, test that the plugin is working:
+
+1. **Check slash commands are available:**
+
+   ```
+   /domino-app-init
+   ```
+
+2. **Test skill auto-invocation** by asking a Domino-related question:
+
+   ```
+   Help me deploy a Streamlit app to Domino
+   ```
+
+   Claude should automatically invoke the `domino-app-deployment` skill.
+
+3. **Check the plugin is listed:**
+
+   ```
+   /plugin
+   ```
+
+   Navigate to the **Installed** tab.
+
+> **Note:** Plugin skills do not appear in the `/skills` list. They are auto-invoked by Claude based on task context and will show in Claude's init message at the top of a new session.
+
+---
+
+## Updating the Plugin
+
+If installed via the marketplace approach, navigate to the plugin source and pull updates:
+
+```bash
+cd ~/.claude/marketplaces/domino/plugins/domino-claude-plugin
+git pull
+```
+
+Then restart Claude Code. If installed via `--plugin-dir`, pull updates in the cloned directory.
+
+---
+
+## What's Included
+
+### Skills (18 Total)
 
 | Skill | Description |
-|-------|-------------|
+| --- | --- |
 | `domino-workspaces` | Jupyter, VS Code, RStudio workspace management |
 | `domino-jobs` | Jobs and scheduled jobs execution |
 | `domino-environments` | Compute environments and Dockerfile customization |
@@ -64,78 +219,92 @@ Add the plugin path to your Claude Code configuration file (`~/.claude/settings.
 | `domino-data-sdk` | Data SDK (domino-data) for data sources, datasets, training sets |
 | `domino-ui-design` | Knowledge on Domino UI styling for integrated App design |
 
-## Slash Commands
+### Slash Commands
 
 | Command | Description |
-|---------|-------------|
+| --- | --- |
 | `/domino-app-init` | Initialize a new Domino app with framework templates |
 | `/domino-debug-proxy` | Debug reverse proxy issues for apps |
 | `/domino-experiment-setup` | Set up MLflow experiment tracking |
 | `/domino-trace-setup` | Set up GenAI tracing with the Domino SDK |
 
-## Subagents
+### Subagents
 
 | Agent | Description |
-|-------|-------------|
+| --- | --- |
 | `domino-deploy` | Specialized agent for deploying apps, models, and endpoints |
 | `domino-debug` | Agent for debugging Domino issues and troubleshooting |
 | `domino-setup` | Agent for setting up new projects and configurations |
 
-## Output Styles
+### Output Styles
 
 Switch output styles with `/output-style`:
 
 | Style | Description |
-|-------|-------------|
+| --- | --- |
 | `domino-learning` | Educational mode with Domino Insights after each task |
 | `domino-mlops` | Production-focused with MLOps checklists and best practices |
+
+---
 
 ## Project Structure
 
 ```
-domino-data-lab-plugin/
+domino-claude-plugin/
 ├── .claude-plugin/
 │   └── plugin.json          # Plugin manifest
-├── .mcp.json                # MCP server configuration
 ├── agents/                  # Subagents
-│   ├── domino-deploy.md     # Deployment agent
-│   ├── domino-debug.md      # Debugging agent
-│   └── domino-setup.md      # Setup agent
+│   ├── domino-deploy.md
+│   ├── domino-debug.md
+│   └── domino-setup.md
 ├── output-styles/           # Custom output styles
-│   ├── domino-learning.md   # Educational mode
-│   └── domino-mlops.md      # MLOps best practices
-├── skills/
-│   ├── workspaces/          # Workspace management
-│   ├── jobs/                # Job execution
-│   ├── environments/        # Compute environments
-│   ├── datasets/            # Data management
-│   ├── projects/            # Project & Git
-│   ├── app-deployment/      # Web apps
-│   ├── experiment-tracking/ # MLflow
-│   ├── genai-tracing/       # Agent tracing
-│   ├── model-endpoints/     # Model APIs
-│   ├── model-monitoring/    # Drift detection
-│   ├── flows/               # Workflows
-│   ├── distributed-computing/ # Spark/Ray/Dask
-│   ├── ai-gateway/          # LLM proxy
-│   ├── launchers/           # Self-service forms
-│   ├── vibe-modeling/       # MCP servers
-│   ├── data-connectivity/   # Cloud storage
-│   ├── python-sdk/          # python-domino SDK
-│   └── domino-data-sdk/     # domino-data SDK
+│   ├── domino-learning.md
+│   └── domino-mlops.md
+├── skills/                  # 18 skill directories
+│   ├── workspaces/
+│   ├── jobs/
+│   ├── environments/
+│   ├── datasets/
+│   ├── projects/
+│   ├── app-deployment/
+│   ├── experiment-tracking/
+│   ├── genai-tracing/
+│   ├── model-endpoints/
+│   ├── model-monitoring/
+│   ├── flows/
+│   ├── distributed-computing/
+│   ├── ai-gateway/
+│   ├── launchers/
+│   ├── vibe-modeling/
+│   ├── data-connectivity/
+│   ├── python-sdk/
+│   └── domino-data-sdk/
 ├── commands/                # Slash commands
 ├── hooks/                   # Example automation hooks
-│   └── README.md            # Hook documentation
 ├── templates/               # Code templates
 │   ├── vite-react/
 │   ├── streamlit/
 │   ├── dash/
 │   ├── experiment/
 │   └── tracing/
-├── README.md
+├── CONTRIBUTING.md
 ├── LICENSE
-└── .gitignore
+└── README.md
 ```
+
+---
+
+## Troubleshooting
+
+| Issue | Solution |
+| --- | --- |
+| `/skills` shows "No skills found" | Plugin skills don't appear in `/skills` — they are auto-invoked by Claude based on context. Check `/plugin` → Installed tab instead. |
+| Plugin not loading from settings.json | Claude Code does **not** support a `"plugins"` array in `settings.json`. Use the marketplace approach or `--plugin-dir` flag. |
+| `~` path not expanding | Always use absolute paths (e.g., `/home/ubuntu/...`) in marketplace commands and settings. |
+| Slash commands not appearing | Restart Claude Code after installing. Commands are loaded at session start. |
+| "Failed to parse marketplace file" | Ensure `marketplace.json` has the `owner` object and `source` is a string path (e.g., `"./plugins/domino-claude-plugin"`), not a nested object. |
+
+---
 
 ## Usage Examples
 
@@ -143,7 +312,6 @@ domino-data-lab-plugin/
 
 ```
 User: Help me deploy a Streamlit dashboard to Domino
-
 Claude: I'll help you set up a Streamlit app for Domino...
 ```
 
@@ -151,7 +319,6 @@ Claude: I'll help you set up a Streamlit app for Domino...
 
 ```
 User: /domino-experiment-setup
-
 Claude: I'll configure MLflow experiment tracking for your project...
 ```
 
@@ -159,7 +326,6 @@ Claude: I'll configure MLflow experiment tracking for your project...
 
 ```
 User: How do I run a training script every day at midnight?
-
 Claude: I'll show you how to create a scheduled job in Domino...
 ```
 
@@ -167,36 +333,33 @@ Claude: I'll show you how to create a scheduled job in Domino...
 
 ```
 User: I need to deploy my scikit-learn model as an API
-
 Claude: I'll help you create a model endpoint in Domino...
 ```
+
+---
 
 ## API Reference
 
 The `domino-python-sdk` skill includes comprehensive REST API documentation:
 
-- [API-PROJECTS.md](skills/python-sdk/API-PROJECTS.md) - Projects, collaborators, Git repos
-- [API-JOBS.md](skills/python-sdk/API-JOBS.md) - Jobs, logs, scheduled execution
-- [API-DATASETS.md](skills/python-sdk/API-DATASETS.md) - Datasets, snapshots, permissions
-- [API-MODELS.md](skills/python-sdk/API-MODELS.md) - Model APIs, deployments, registry
-- [API-ENVIRONMENTS.md](skills/python-sdk/API-ENVIRONMENTS.md) - Environments, revisions
-- [API-APPS.md](skills/python-sdk/API-APPS.md) - Apps, versions, instances
-- [API-ADMIN.md](skills/python-sdk/API-ADMIN.md) - Users, orgs, hardware tiers
+- `API-PROJECTS.md` — Projects, collaborators, Git repos
+- `API-JOBS.md` — Jobs, logs, scheduled execution
+- `API-DATASETS.md` — Datasets, snapshots, permissions
+- `API-MODELS.md` — Model APIs, deployments, registry
+- `API-ENVIRONMENTS.md` — Environments, revisions
+- `API-APPS.md` — Apps, versions, instances
+- `API-ADMIN.md` — Users, orgs, hardware tiers
 
-## Requirements
-
-- Claude Code CLI
-- Access to a Domino Data Lab instance
-- Domino API key (for API operations)
+---
 
 ## Documentation
-
-For more information about Domino Data Lab, see:
 
 - [Domino Documentation](https://docs.dominodatalab.com/en/cloud/user_guide/71a047/what-is-domino/)
 - [Domino API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
 - [Domino Blueprints](https://domino.ai/resources/blueprints)
 - [python-domino GitHub](https://github.com/dominodatalab/python-domino)
+- [Claude Code Plugin Docs](https://code.claude.com/docs/en/plugins)
+- [Claude Code Marketplace Docs](https://code.claude.com/docs/en/plugin-marketplaces)
 
 ## Contributing
 
@@ -204,9 +367,9 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ## Support
 
 - For Domino platform issues: [Domino Support](https://support.dominodatalab.com/)
-- For plugin issues: [GitHub Issues](https://github.com/jvdomino/domino-data-lab-plugin/issues)
+- For plugin issues: [GitHub Issues](https://github.com/dominodatalab/domino-claude-plugin/issues)
