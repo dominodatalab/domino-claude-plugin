@@ -1,666 +1,336 @@
 # Domino Flows Examples
 
-This guide provides complete, production-ready flow examples for common ML workflows.
+Complete, production-ready flow examples for Domino Flows.
+
+> ⚠️ **Critical**: Use `DominoJobTask` + `DominoJobConfig`. Native `@task` decorators are NOT supported.
 
 ## Example 1: Data Processing Pipeline
 
-### Use Case
-
-ETL pipeline that loads raw data, cleans it, and creates features.
+### Flow Definition (`flows/data_pipeline.py`)
 
 ```python
-from flytekit import task, workflow, Resources
-from flytekit.types.structured import StructuredDataset
-from flytekit.types.file import FlyteFile
-from typing import NamedTuple
-import pandas as pd
+from flytekit import workflow
+from flytekitplugins.domino.task import DominoJobConfig, DominoJobTask
 
-class DataStats(NamedTuple):
-    num_rows: int
-    num_cols: int
-    null_percentage: float
-
-@task(
-    requests=Resources(cpu="2", mem="4Gi"),
-    cache=True,
-    cache_version="1.0"
+load_task = DominoJobTask(
+    name="Load Data",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/flows/stages/load.py'",
+    ),
+    inputs={"source_path": str, "dataset_version": str},
+    outputs={"o0": str},
+    use_latest=True,
 )
-def load_raw_data(source_path: str) -> StructuredDataset:
-    """Load raw data from source."""
-    df = pd.read_csv(source_path)
-    return StructuredDataset(dataframe=df)
 
-@task(requests=Resources(cpu="2", mem="4Gi"))
-def validate_data(data: StructuredDataset) -> DataStats:
-    """Validate data quality."""
-    df = data.open(pd.DataFrame).all()
+clean_task = DominoJobTask(
+    name="Clean Data",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/flows/stages/clean.py'",
+    ),
+    inputs={"load_output": str},
+    outputs={"o0": str},
+    use_latest=True,
+)
 
-    stats = DataStats(
-        num_rows=len(df),
-        num_cols=len(df.columns),
-        null_percentage=df.isnull().sum().sum() / df.size * 100
-    )
-
-    if stats.null_percentage > 50:
-        raise ValueError(f"Too many null values: {stats.null_percentage}%")
-
-    return stats
-
-@task(requests=Resources(cpu="4", mem="8Gi"))
-def clean_data(data: StructuredDataset) -> StructuredDataset:
-    """Clean and impute missing values."""
-    df = data.open(pd.DataFrame).all()
-
-    # Drop duplicates
-    df = df.drop_duplicates()
-
-    # Impute missing values
-    numeric_cols = df.select_dtypes(include=['number']).columns
-    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
-
-    categorical_cols = df.select_dtypes(include=['object']).columns
-    df[categorical_cols] = df[categorical_cols].fillna('unknown')
-
-    return StructuredDataset(dataframe=df)
-
-@task(requests=Resources(cpu="4", mem="8Gi"))
-def create_features(data: StructuredDataset) -> StructuredDataset:
-    """Engineer features from clean data."""
-    df = data.open(pd.DataFrame).all()
-
-    # Example feature engineering
-    if 'date' in df.columns:
-        df['date'] = pd.to_datetime(df['date'])
-        df['day_of_week'] = df['date'].dt.dayofweek
-        df['month'] = df['date'].dt.month
-
-    return StructuredDataset(dataframe=df)
-
-@task
-def save_processed_data(
-    data: StructuredDataset,
-    output_path: str
-) -> str:
-    """Save processed data."""
-    df = data.open(pd.DataFrame).all()
-    df.to_parquet(output_path, index=False)
-    return output_path
+feature_task = DominoJobTask(
+    name="Create Features",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/flows/stages/features.py'",
+    ),
+    inputs={"clean_output": str},
+    outputs={"o0": str},
+    use_latest=True,
+)
 
 @workflow
-def data_processing_pipeline(
-    source_path: str,
-    output_path: str
+def data_pipeline(
+    source_path: str = "/mnt/data/raw.csv",
+    dataset_version: str = "1.0",
 ) -> str:
-    """Complete data processing pipeline."""
-    raw_data = load_raw_data(source_path=source_path)
-    stats = validate_data(data=raw_data)
-    clean = clean_data(data=raw_data)
-    features = create_features(data=clean)
-    final_path = save_processed_data(data=features, output_path=output_path)
-    return final_path
+    load_output = load_task(source_path=source_path, dataset_version=dataset_version)
+    clean_output = clean_task(load_output=load_output)
+    features_output = feature_task(clean_output=clean_output)
+    return features_output
+```
+
+### Stage Script (`flows/stages/load.py`)
+
+```python
+import json, os
+import pandas as pd
+
+INPUTS = "/workflow/inputs"
+OUTPUTS = "/workflow/outputs"
+
+def main():
+    source_path = open(f"{INPUTS}/source_path").read().strip()
+    dataset_version = open(f"{INPUTS}/dataset_version").read().strip()
+
+    df = pd.read_csv(source_path)
+
+    # Save to shared location (e.g., /mnt/artifacts/ or /mnt/data/)
+    output_path = "/mnt/artifacts/loaded_data.parquet"
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_parquet(output_path, index=False)
+
+    result = {
+        "output_path": output_path,
+        "row_count": len(df),
+        "dataset_version": dataset_version,
+    }
+    os.makedirs(OUTPUTS, exist_ok=True)
+    with open(f"{OUTPUTS}/o0", "w") as f:
+        f.write(json.dumps(result))
+
+if __name__ == "__main__":
+    main()
 ```
 
 ## Example 2: Model Training Pipeline
 
-### Use Case
-
-Train, evaluate, and register a machine learning model.
+### Flow Definition (`flows/training_pipeline.py`)
 
 ```python
-from flytekit import task, workflow, Resources
-from flytekit.types.file import FlyteFile
-from flytekit.types.structured import StructuredDataset
-from typing import NamedTuple, Tuple
+from flytekit import workflow
+from flytekitplugins.domino.task import DominoJobConfig, DominoJobTask
+
+prepare_task = DominoJobTask(
+    name="Prepare Training Data",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/flows/stages/prepare.py'",
+    ),
+    inputs={"data_path": str, "test_size": float},
+    outputs={"o0": str},
+    use_latest=True,
+)
+
+train_task = DominoJobTask(
+    name="Train Model",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/flows/stages/train.py'",
+        # Override hardware for GPU training:
+        # HardwareTierId="gpu-k8s",
+    ),
+    inputs={"prepare_output": str, "model_type": str},
+    outputs={"o0": str},
+    use_latest=True,
+)
+
+evaluate_task = DominoJobTask(
+    name="Evaluate Model",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/flows/stages/evaluate.py'",
+    ),
+    inputs={"train_output": str},
+    outputs={"o0": str},
+    use_latest=True,
+)
+
+@workflow
+def training_pipeline(
+    data_path: str = "/mnt/data/features.parquet",
+    test_size: float = 0.2,
+    model_type: str = "xgboost",
+) -> str:
+    prepare_output = prepare_task(data_path=data_path, test_size=test_size)
+    train_output = train_task(prepare_output=prepare_output, model_type=model_type)
+    eval_output = evaluate_task(train_output=train_output)
+    return eval_output
+```
+
+### Stage Script (`flows/stages/train.py`)
+
+```python
+import json, os
 import mlflow
-
-class TrainingResults(NamedTuple):
-    model_path: str
-    accuracy: float
-    precision: float
-    recall: float
-    f1_score: float
-
-@task(requests=Resources(cpu="2", mem="4Gi"))
-def split_data(
-    data: StructuredDataset,
-    test_size: float = 0.2
-) -> Tuple[StructuredDataset, StructuredDataset]:
-    """Split data into train and test sets."""
-    import pandas as pd
-    from sklearn.model_selection import train_test_split
-
-    df = data.open(pd.DataFrame).all()
-    train_df, test_df = train_test_split(df, test_size=test_size, random_state=42)
-
-    return (
-        StructuredDataset(dataframe=train_df),
-        StructuredDataset(dataframe=test_df)
-    )
-
-@task(
-    requests=Resources(cpu="4", mem="8Gi", gpu="1"),
-    timeout=timedelta(hours=4),
-    retries=2
-)
-def train_model(
-    train_data: StructuredDataset,
-    target_column: str,
-    model_type: str = "random_forest"
-) -> FlyteFile:
-    """Train ML model."""
-    import pandas as pd
-    import joblib
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.linear_model import LogisticRegression
-
-    df = train_data.open(pd.DataFrame).all()
-    X = df.drop(columns=[target_column])
-    y = df[target_column]
-
-    # Select model
-    if model_type == "random_forest":
-        model = RandomForestClassifier(n_estimators=100, random_state=42)
-    else:
-        model = LogisticRegression(random_state=42)
-
-    # Train
-    model.fit(X, y)
-
-    # Save model
-    model_path = "/tmp/model.joblib"
-    joblib.dump(model, model_path)
-
-    return FlyteFile(path=model_path)
-
-@task(requests=Resources(cpu="2", mem="4Gi"))
-def evaluate_model(
-    model_file: FlyteFile,
-    test_data: StructuredDataset,
-    target_column: str
-) -> TrainingResults:
-    """Evaluate model performance."""
-    import pandas as pd
-    import joblib
-    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-
-    # Load model
-    model = joblib.load(model_file)
-
-    # Prepare test data
-    df = test_data.open(pd.DataFrame).all()
-    X_test = df.drop(columns=[target_column])
-    y_test = df[target_column]
-
-    # Predict
-    y_pred = model.predict(X_test)
-
-    # Calculate metrics
-    results = TrainingResults(
-        model_path=str(model_file),
-        accuracy=accuracy_score(y_test, y_pred),
-        precision=precision_score(y_test, y_pred, average='weighted'),
-        recall=recall_score(y_test, y_pred, average='weighted'),
-        f1_score=f1_score(y_test, y_pred, average='weighted')
-    )
-
-    return results
-
-@task
-def register_model(
-    model_file: FlyteFile,
-    results: TrainingResults,
-    model_name: str
-) -> str:
-    """Register model if performance is acceptable."""
-    import mlflow
-
-    if results.accuracy < 0.8:
-        print(f"Model accuracy {results.accuracy} below threshold, not registering")
-        return "not_registered"
-
-    with mlflow.start_run():
-        mlflow.log_metrics({
-            "accuracy": results.accuracy,
-            "precision": results.precision,
-            "recall": results.recall,
-            "f1_score": results.f1_score
-        })
-
-        mlflow.sklearn.log_model(
-            sk_model=joblib.load(model_file),
-            artifact_path="model",
-            registered_model_name=model_name
-        )
-
-    return f"registered:{model_name}"
-
-@workflow
-def model_training_pipeline(
-    data: StructuredDataset,
-    target_column: str,
-    model_name: str,
-    model_type: str = "random_forest"
-) -> str:
-    """Complete model training pipeline."""
-    train_data, test_data = split_data(data=data)
-
-    model_file = train_model(
-        train_data=train_data,
-        target_column=target_column,
-        model_type=model_type
-    )
-
-    results = evaluate_model(
-        model_file=model_file,
-        test_data=test_data,
-        target_column=target_column
-    )
-
-    registration_status = register_model(
-        model_file=model_file,
-        results=results,
-        model_name=model_name
-    )
-
-    return registration_status
-```
-
-## Example 3: Batch Inference Pipeline
-
-### Use Case
-
-Run predictions on a large dataset in parallel batches.
-
-```python
-from flytekit import task, workflow, dynamic, Resources
-from flytekit.types.structured import StructuredDataset
-from flytekit.types.file import FlyteFile
-from typing import List
 import pandas as pd
-
-@task
-def load_model(model_path: str) -> FlyteFile:
-    """Load model from registry or path."""
-    return FlyteFile(path=model_path)
-
-@task
-def split_into_batches(
-    data: StructuredDataset,
-    batch_size: int
-) -> List[StructuredDataset]:
-    """Split data into batches for parallel processing."""
-    df = data.open(pd.DataFrame).all()
-
-    batches = []
-    for i in range(0, len(df), batch_size):
-        batch_df = df.iloc[i:i+batch_size]
-        batches.append(StructuredDataset(dataframe=batch_df))
-
-    return batches
-
-@task(requests=Resources(cpu="2", mem="4Gi"))
-def predict_batch(
-    model_file: FlyteFile,
-    batch: StructuredDataset
-) -> StructuredDataset:
-    """Run predictions on a single batch."""
-    import joblib
-
-    model = joblib.load(model_file)
-    df = batch.open(pd.DataFrame).all()
-
-    predictions = model.predict(df)
-    df['prediction'] = predictions
-
-    return StructuredDataset(dataframe=df)
-
-@task
-def combine_results(
-    results: List[StructuredDataset]
-) -> StructuredDataset:
-    """Combine all batch results."""
-    dfs = [r.open(pd.DataFrame).all() for r in results]
-    combined = pd.concat(dfs, ignore_index=True)
-    return StructuredDataset(dataframe=combined)
-
-@dynamic
-def parallel_inference(
-    model_file: FlyteFile,
-    batches: List[StructuredDataset]
-) -> List[StructuredDataset]:
-    """Run inference on batches in parallel using dynamic task."""
-    results = []
-    for batch in batches:
-        result = predict_batch(model_file=model_file, batch=batch)
-        results.append(result)
-    return results
-
-@workflow
-def batch_inference_pipeline(
-    data: StructuredDataset,
-    model_path: str,
-    batch_size: int = 1000
-) -> StructuredDataset:
-    """Complete batch inference pipeline."""
-    model = load_model(model_path=model_path)
-    batches = split_into_batches(data=data, batch_size=batch_size)
-    results = parallel_inference(model_file=model, batches=batches)
-    final = combine_results(results=results)
-    return final
-```
-
-## Example 4: Retraining Pipeline with Data Drift Detection
-
-### Use Case
-
-Automatically retrain model when data drift is detected.
-
-```python
-from flytekit import task, workflow, conditional, Resources
-from flytekit.types.structured import StructuredDataset
-from flytekit.types.file import FlyteFile
-from typing import NamedTuple
-from datetime import timedelta
-
-class DriftReport(NamedTuple):
-    drift_detected: bool
-    drift_score: float
-    features_drifted: list
-
-@task
-def load_reference_data(path: str) -> StructuredDataset:
-    """Load reference (training) data distribution."""
-    import pandas as pd
-    return StructuredDataset(dataframe=pd.read_parquet(path))
-
-@task
-def load_current_data(path: str) -> StructuredDataset:
-    """Load current (production) data."""
-    import pandas as pd
-    return StructuredDataset(dataframe=pd.read_parquet(path))
-
-@task
-def detect_drift(
-    reference: StructuredDataset,
-    current: StructuredDataset,
-    threshold: float = 0.1
-) -> DriftReport:
-    """Detect data drift using statistical tests."""
-    from scipy import stats
-    import pandas as pd
-
-    ref_df = reference.open(pd.DataFrame).all()
-    cur_df = current.open(pd.DataFrame).all()
-
-    features_drifted = []
-    drift_scores = []
-
-    for col in ref_df.select_dtypes(include=['number']).columns:
-        if col in cur_df.columns:
-            stat, p_value = stats.ks_2samp(ref_df[col], cur_df[col])
-            drift_scores.append(stat)
-            if p_value < 0.05:
-                features_drifted.append(col)
-
-    avg_drift = sum(drift_scores) / len(drift_scores) if drift_scores else 0
-
-    return DriftReport(
-        drift_detected=avg_drift > threshold,
-        drift_score=avg_drift,
-        features_drifted=features_drifted
-    )
-
-@task
-def send_drift_alert(report: DriftReport) -> str:
-    """Send alert about drift detection."""
-    print(f"Drift detected! Score: {report.drift_score}")
-    print(f"Features affected: {report.features_drifted}")
-    # In production: send email, Slack message, etc.
-    return "alert_sent"
-
-@task(
-    requests=Resources(cpu="4", mem="8Gi"),
-    timeout=timedelta(hours=2)
-)
-def retrain_model(
-    data: StructuredDataset,
-    target_column: str
-) -> FlyteFile:
-    """Retrain model with new data."""
-    import pandas as pd
-    import joblib
-    from sklearn.ensemble import RandomForestClassifier
-
-    df = data.open(pd.DataFrame).all()
-    X = df.drop(columns=[target_column])
-    y = df[target_column]
-
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X, y)
-
-    model_path = "/tmp/retrained_model.joblib"
-    joblib.dump(model, model_path)
-
-    return FlyteFile(path=model_path)
-
-@task
-def skip_retraining() -> str:
-    """No retraining needed."""
-    return "no_drift_detected"
-
-@workflow
-def drift_monitoring_pipeline(
-    reference_path: str,
-    current_path: str,
-    target_column: str,
-    drift_threshold: float = 0.1
-) -> str:
-    """Monitor for drift and retrain if needed."""
-    reference = load_reference_data(path=reference_path)
-    current = load_current_data(path=current_path)
-
-    report = detect_drift(
-        reference=reference,
-        current=current,
-        threshold=drift_threshold
-    )
-
-    result = conditional("drift_check").if_(
-        report.drift_detected == True
-    ).then(
-        retrain_model(data=current, target_column=target_column)
-    ).else_().then(
-        skip_retraining()
-    )
-
-    # Always send alert if drift detected
-    send_drift_alert(report=report)
-
-    return str(result)
-```
-
-## Example 5: Multi-Model Ensemble Pipeline
-
-### Use Case
-
-Train multiple models and combine them into an ensemble.
-
-```python
-from flytekit import task, workflow, dynamic, Resources
-from flytekit.types.file import FlyteFile
-from flytekit.types.structured import StructuredDataset
-from typing import List, NamedTuple
-import pandas as pd
-
-class ModelResult(NamedTuple):
-    model_file: FlyteFile
-    model_type: str
-    accuracy: float
-
-@task(requests=Resources(cpu="2", mem="4Gi"))
-def train_random_forest(
-    train_data: StructuredDataset,
-    target_column: str
-) -> ModelResult:
-    """Train Random Forest model."""
-    import joblib
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import cross_val_score
-
-    df = train_data.open(pd.DataFrame).all()
-    X = df.drop(columns=[target_column])
-    y = df[target_column]
-
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    scores = cross_val_score(model, X, y, cv=5)
-    model.fit(X, y)
-
-    path = "/tmp/random_forest.joblib"
-    joblib.dump(model, path)
-
-    return ModelResult(
-        model_file=FlyteFile(path=path),
-        model_type="random_forest",
-        accuracy=scores.mean()
-    )
-
-@task(requests=Resources(cpu="2", mem="4Gi"))
-def train_gradient_boosting(
-    train_data: StructuredDataset,
-    target_column: str
-) -> ModelResult:
-    """Train Gradient Boosting model."""
-    import joblib
-    from sklearn.ensemble import GradientBoostingClassifier
-    from sklearn.model_selection import cross_val_score
-
-    df = train_data.open(pd.DataFrame).all()
-    X = df.drop(columns=[target_column])
-    y = df[target_column]
-
-    model = GradientBoostingClassifier(n_estimators=100, random_state=42)
-    scores = cross_val_score(model, X, y, cv=5)
-    model.fit(X, y)
-
-    path = "/tmp/gradient_boosting.joblib"
-    joblib.dump(model, path)
-
-    return ModelResult(
-        model_file=FlyteFile(path=path),
-        model_type="gradient_boosting",
-        accuracy=scores.mean()
-    )
-
-@task(requests=Resources(cpu="2", mem="4Gi"))
-def train_logistic_regression(
-    train_data: StructuredDataset,
-    target_column: str
-) -> ModelResult:
-    """Train Logistic Regression model."""
-    import joblib
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.model_selection import cross_val_score
-
-    df = train_data.open(pd.DataFrame).all()
-    X = df.drop(columns=[target_column])
-    y = df[target_column]
-
-    model = LogisticRegression(random_state=42, max_iter=1000)
-    scores = cross_val_score(model, X, y, cv=5)
-    model.fit(X, y)
-
-    path = "/tmp/logistic_regression.joblib"
-    joblib.dump(model, path)
-
-    return ModelResult(
-        model_file=FlyteFile(path=path),
-        model_type="logistic_regression",
-        accuracy=scores.mean()
-    )
-
-@task
-def create_ensemble(
-    models: List[ModelResult],
-    weights: str = "equal"
-) -> FlyteFile:
-    """Create ensemble from trained models."""
-    import joblib
-    from sklearn.ensemble import VotingClassifier
-
-    # Load all models
-    estimators = []
-    for m in models:
-        model = joblib.load(m.model_file)
-        estimators.append((m.model_type, model))
-
-    # Create voting ensemble
-    if weights == "accuracy":
-        model_weights = [m.accuracy for m in models]
-    else:
-        model_weights = None
-
-    ensemble = VotingClassifier(
-        estimators=estimators,
-        voting='soft',
-        weights=model_weights
-    )
-
-    path = "/tmp/ensemble.joblib"
-    joblib.dump(ensemble, path)
-
-    return FlyteFile(path=path)
-
-@workflow
-def ensemble_pipeline(
-    train_data: StructuredDataset,
-    target_column: str
-) -> FlyteFile:
-    """Train multiple models and create ensemble."""
-    # Train models in parallel
-    rf_result = train_random_forest(
-        train_data=train_data,
-        target_column=target_column
-    )
-    gb_result = train_gradient_boosting(
-        train_data=train_data,
-        target_column=target_column
-    )
-    lr_result = train_logistic_regression(
-        train_data=train_data,
-        target_column=target_column
-    )
-
-    # Create ensemble
-    ensemble = create_ensemble(
-        models=[rf_result, gb_result, lr_result],
-        weights="accuracy"
-    )
-
-    return ensemble
-```
-
-## Running Examples
-
-### Local Execution
-
-```python
-# Test locally
-from flytekit.configuration import Config
+from xgboost import XGBRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+
+INPUTS = "/workflow/inputs"
+OUTPUTS = "/workflow/outputs"
+
+def main():
+    prepare_output = json.loads(open(f"{INPUTS}/prepare_output").read())
+    model_type = open(f"{INPUTS}/model_type").read().strip()
+
+    df = pd.read_parquet(prepare_output["train_path"])
+    X = df.drop(columns=["target"])
+    y = df["target"]
+
+    with mlflow.start_run() as run:
+        model = XGBRegressor(n_estimators=200, max_depth=6, learning_rate=0.1)
+        model.fit(X, y)
+
+        preds = model.predict(X)
+        r2 = r2_score(y, preds)
+        mlflow.log_metric("r2_score", r2)
+        mlflow.xgboost.log_model(model, "model")
+
+    result = {
+        "run_id": run.info.run_id,
+        "r2_score": r2,
+        "model_type": model_type,
+    }
+    os.makedirs(OUTPUTS, exist_ok=True)
+    with open(f"{OUTPUTS}/o0", "w") as f:
+        f.write(json.dumps(result))
+    print(f"Training complete: R²={r2:.4f}, run_id={run.info.run_id}")
 
 if __name__ == "__main__":
-    # Run workflow locally
-    result = data_processing_pipeline(
-        source_path="data/raw.csv",
-        output_path="data/processed.parquet"
-    )
-    print(f"Result: {result}")
+    main()
 ```
 
-### Register and Run on Domino
+## Example 3: Multi-Stage ML Pipeline (Full Reference)
+
+This is the Engine Forge 7-stage pipeline — a complete production example.
+
+### Flow Definition
+
+```python
+"""7-stage engine design pipeline."""
+import logging
+from flytekit import workflow
+from flytekitplugins.domino.task import DominoJobConfig, DominoJobTask
+
+logger = logging.getLogger(__name__)
+
+def _make_task(stage_num: int, name: str, inputs: dict, outputs: dict = None) -> DominoJobTask:
+    """Helper to create a stage task with consistent config."""
+    return DominoJobTask(
+        name=f"Stage {stage_num}: {name}",
+        domino_job_config=DominoJobConfig(
+            Command=f"bash -c 'PYTHONPATH=/mnt/code python /mnt/code/app/flow/stages/stage{stage_num}_{name.lower().replace(' ', '_')}.py'",
+        ),
+        inputs=inputs,
+        outputs=outputs or {"o0": str},
+        use_latest=True,
+    )
+
+ingest_task = DominoJobTask(
+    name="Stage 1: Ingest Data",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/app/flow/stages/stage1_ingest.py'",
+    ),
+    inputs={"dataset_version": str, "component_id": str, "spec_json": str, "n_top": int},
+    outputs={"o0": str},
+    use_latest=True,
+)
+
+analyze_task = DominoJobTask(
+    name="Stage 2: Analyze Designs",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/app/flow/stages/stage2_analyze.py'",
+    ),
+    inputs={"snapshot": str},
+    outputs={"o0": str},
+    use_latest=True,
+)
+
+# ... stages 3-6 follow same pattern ...
+
+@workflow
+def engine_forge_pipeline(
+    component_id: str = "engine-bracket",
+    dataset_version: str = "1.0",
+    spec_json: str = '{"max_stress_mpa": 1200.0}',
+    n_top: int = 2,
+) -> str:
+    snapshot = ingest_task(
+        dataset_version=dataset_version,
+        component_id=component_id,
+        spec_json=spec_json,
+        n_top=n_top,
+    )
+    analysis_output = analyze_task(snapshot=snapshot)
+    # ... chain remaining stages ...
+    return analysis_output
+```
+
+## Running Flows
+
+### Trigger Remotely
 
 ```bash
-# Package and register workflows
-pyflyte register workflows/
+# Always commit and push first — jobs run against remote repo state
+git add -A && git commit -m "..." && git push
 
-# Run via Domino UI or CLI
+# Trigger the flow
+PYTHONPATH=/mnt/code pyflyte run --remote \
+    app/flow/my_flow.py my_pipeline \
+    --arg1 "value1" \
+    --arg2 42
+```
+
+### Monitor Execution
+
+```python
+from flytekit.remote import FlyteRemote
+from flytekit.configuration import Config
+import time
+
+remote = FlyteRemote(
+    config=Config.auto(),   # reads ~/.flyte/config.yaml
+    default_project="<your-project-id>",
+    default_domain="development",
+)
+
+PHASES = {0:"UNDEFINED",1:"QUEUED",2:"RUNNING",3:"SUCCEEDING",4:"SUCCEEDED",
+          5:"FAILING",6:"FAILED",7:"ABORTED",8:"TIMED_OUT"}
+
+exec_id = "my-execution-name"   # from pyflyte run output
+for _ in range(60):
+    execution = remote.fetch_execution(name=exec_id)
+    remote.sync(execution, sync_nodes=True)
+    phase = PHASES[execution.closure.phase]
+
+    node_statuses = {
+        nid: PHASES[ne.closure.phase]
+        for nid, ne in execution.node_executions.items()
+    }
+    print(f"{phase}: {node_statuses}")
+
+    if phase in ("SUCCEEDED", "FAILED", "ABORTED"):
+        break
+    time.sleep(30)
+```
+
+### Debug Failed Stage
+
+```python
+for node_id, node_exec in execution.node_executions.items():
+    phase = PHASES[node_exec.closure.phase]
+    if phase in ("FAILED", "FAILING"):
+        for te in (node_exec.task_executions or []):
+            full_te = remote.client.get_task_execution(te.id)
+            if full_te.closure.error:
+                # Full error message includes Python traceback from the job
+                print(f"=== {node_id} error ===")
+                print(full_te.closure.error.message)
+```
+
+## Data Sharing Between Stages
+
+Since each stage is an isolated Domino Job, persistent data must use shared storage:
+
+| Storage | Path | Use Case |
+|---------|------|----------|
+| Domino Artifacts | `/mnt/artifacts/` | Model files, reports (persisted) |
+| Domino Datasets | `/mnt/data/<name>/` | Read-only reference data |
+| Flow messages | `/workflow/inputs|outputs/` | Small JSON metadata between stages |
+
+**Pattern**: Write large files to `/mnt/artifacts/`, pass the path as a JSON string through `/workflow/outputs/o0`.
+
+```python
+# Stage 2 writes parquet to artifacts, passes path via flow
+output_path = "/mnt/artifacts/analysis_results.parquet"
+df_results.to_parquet(output_path)
+result = {"results_path": output_path, "row_count": len(df_results)}
+with open(f"{OUTPUTS}/o0", "w") as f:
+    f.write(json.dumps(result))
+
+# Stage 3 reads from artifacts using the path
+analysis_output = json.loads(open(f"{INPUTS}/analysis_output").read())
+df = pd.read_parquet(analysis_output["results_path"])
 ```

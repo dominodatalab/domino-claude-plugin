@@ -35,41 +35,74 @@ Domino Flows enable:
 
 ## Quick Start
 
+> ⚠️ **Critical**: Domino Flows does NOT support native Flyte `@task` decorators.
+> Tasks must use `DominoJobTask` + `DominoJobConfig`. Only `@workflow` is unchanged.
+
 ### Basic Flow
 
+Each task runs as a Domino Job. Stage scripts read from `/workflow/inputs/<name>`
+and write to `/workflow/outputs/o0`. Pass `PYTHONPATH=/mnt/code` in the command.
+
 ```python
-from flytekit import task, workflow
+from flytekit import workflow
+from flytekitplugins.domino.task import DominoJobConfig, DominoJobTask
 
-@task
-def preprocess_data(input_path: str) -> str:
-    """Task 1: Data preprocessing"""
-    # Processing logic
-    output_path = "/mnt/data/processed.parquet"
-    return output_path
+preprocess_task = DominoJobTask(
+    name="Preprocess Data",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/stages/preprocess.py'",
+    ),
+    inputs={"input_path": str},
+    outputs={"o0": str},
+    use_latest=True,
+)
 
-@task
-def train_model(data_path: str) -> str:
-    """Task 2: Model training"""
-    # Training logic
-    model_path = "/mnt/artifacts/model.pkl"
-    return model_path
+train_task = DominoJobTask(
+    name="Train Model",
+    domino_job_config=DominoJobConfig(
+        Command="bash -c 'PYTHONPATH=/mnt/code python /mnt/code/stages/train.py'",
+    ),
+    inputs={"preprocess_output": str},
+    outputs={"o0": str},
+    use_latest=True,
+)
 
 @workflow
-def training_pipeline(input_path: str) -> str:
-    """Workflow connecting tasks"""
-    processed = preprocess_data(input_path=input_path)
-    model = train_model(data_path=processed)
-    return model
+def training_pipeline(input_path: str = "/mnt/data/raw.csv") -> str:
+    preprocess_output = preprocess_task(input_path=input_path)
+    result = train_task(preprocess_output=preprocess_output)
+    return result
+```
+
+### Stage Script Pattern
+
+```python
+# stages/preprocess.py
+import json, os
+
+INPUTS, OUTPUTS = "/workflow/inputs", "/workflow/outputs"
+
+def main():
+    input_path = open(f"{INPUTS}/input_path").read().strip()
+    # ... do work ...
+    os.makedirs(OUTPUTS, exist_ok=True)
+    with open(f"{OUTPUTS}/o0", "w") as f:
+        f.write(json.dumps({"output_path": "/mnt/artifacts/processed.parquet"}))
+
+if __name__ == "__main__":
+    main()
 ```
 
 ### Running the Flow
 
-```python
-# Local execution
-result = training_pipeline(input_path="/data/raw.csv")
+```bash
+# Always commit and push first — jobs run against remote repo state
+git add -A && git commit -m "..." && git push
 
-# Submit to Domino
-# Use Domino UI or CLI to trigger the flow
+# Trigger remotely
+PYTHONPATH=/mnt/code pyflyte run --remote \
+    my_flow.py training_pipeline \
+    --input_path "/mnt/data/raw.csv"
 ```
 
 ## When to Use Flows
