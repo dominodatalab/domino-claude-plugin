@@ -22,7 +22,8 @@ This plugin enables Claude Code to help you with all aspects of Domino Data Lab,
 
 - **Claude Code CLI** v1.0.33 or later (`claude --version` to check)
 - Access to a Domino Data Lab instance
-- Domino API key (for API operations)
+- Domino API key (for API operations when running outside a Domino workspace)
+- **`uv`** package manager ([install guide](https://github.com/astral-sh/uv)) — required for the bundled Domino MCP server
 
 ---
 
@@ -195,6 +196,15 @@ Then restart Claude Code. If installed via `--plugin-dir`, pull updates in the c
 
 ## What's Included
 
+### Bundled MCP Server
+
+The plugin includes a vendored copy of the [Domino MCP Server](https://github.com/dominodatalab/domino_mcp_server) that **starts automatically** when the plugin is enabled. It provides tools for running Domino jobs, checking job status/results, and syncing files with DFS-based projects.
+
+- **Inside a Domino workspace:** Fully automatic — authentication uses ephemeral tokens, project info is auto-detected.
+- **Outside Domino (laptop):** Set `DOMINO_API_KEY` and `DOMINO_HOST` as environment variables in your shell.
+
+Requires `uv` to be installed (see [Prerequisites](#prerequisites)).
+
 ### Skills (18 Total)
 
 | Skill | Description |
@@ -213,7 +223,7 @@ Then restart Claude Code. If installed via `--plugin-dir`, pull updates in the c
 | `domino-distributed-computing` | Spark, Ray, Dask cluster management |
 | `domino-ai-gateway` | LLM proxy for OpenAI, Bedrock, etc. |
 | `domino-launchers` | Parameterized web forms for self-service |
-| `domino-vibe-modeling` | MCP server for AI-assisted development |
+| `domino-modeling-assistant` | MCP server for AI-assisted model development |
 | `domino-data-connectivity` | S3 Mountpoint, AWS IRSA, Azure credentials |
 | `domino-python-sdk` | Python SDK (python-domino) and REST API |
 | `domino-data-sdk` | Data SDK (domino-data) for data sources, datasets, training sets |
@@ -253,6 +263,9 @@ Switch output styles with `/output-style`:
 domino-claude-plugin/
 ├── .claude-plugin/
 │   └── plugin.json          # Plugin manifest
+├── .mcp.json                # Bundled MCP server config (auto-starts)
+├── mcp-servers/             # Vendored MCP servers
+│   └── domino_mcp_server/   # Domino MCP Server (jobs, DFS sync)
 ├── agents/                  # Subagents
 │   ├── domino-deploy.md
 │   ├── domino-debug.md
@@ -275,7 +288,7 @@ domino-claude-plugin/
 │   ├── distributed-computing/
 │   ├── ai-gateway/
 │   ├── launchers/
-│   ├── vibe-modeling/
+│   ├── modeling-assistant/
 │   ├── data-connectivity/
 │   ├── python-sdk/
 │   └── domino-data-sdk/

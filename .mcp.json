@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "domino_server": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}/mcp-servers/domino_mcp_server",
+        "run",
+        "domino_mcp_server.py"
+      ],
+      "env": {
+        "DOMINO_API_KEY": "${DOMINO_API_KEY}",
+        "DOMINO_HOST": "${DOMINO_HOST}"
+      }
+    }
+  }
+}
