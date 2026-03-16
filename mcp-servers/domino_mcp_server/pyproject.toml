@@ -1,0 +1,13 @@
+[project]
+name = "domino-mcp-server"
+version = "0.1.0"
+description = "run jobs on the domino data science platform"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+ "mcp[cli]>=1.6.0",
+ "FastMCP",
+ "requests",
+ "python-dotenv"
+
+]
