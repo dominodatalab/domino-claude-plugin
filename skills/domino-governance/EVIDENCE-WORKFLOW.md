@@ -4,17 +4,14 @@ This document explains how to attach evidence, answer policy questions, and crea
 
 ## Setup
 
-The API base URL uses `$DOMINO_API_HOST` (or `$DOMINO_GOVERNANCE_HOST` if governance is on a separate host):
 ```bash
 API_KEY="$DOMINO_USER_API_KEY"
 BASE="${DOMINO_GOVERNANCE_HOST:-$DOMINO_API_HOST}/api/governance/v1"
 ```
 
-## Attachment Types (API Reality)
+## Attachment Types
 
-**IMPORTANT**: The `add_bundle_attachment` MCP tool has limitations. For full control, use direct API calls via `curl` to `POST /api/governance/v1/bundles/{bundleId}/attachments`.
-
-The API supports **two attachment types**:
+The attachments API endpoint is `POST /bundles/{bundleId}/attachments`. It supports **two attachment types**:
 
 ### ModelVersion
 
@@ -65,13 +62,13 @@ curl -X POST "$BASE/bundles/$BUNDLE_ID/attachments" \
 
 **When to use**: For any project file — notebooks, scripts, plots, reports, config files. The filename is the path relative to the project root. Get the commit hash with `git rev-parse HEAD`.
 
-### What Does NOT Work
+### Important Notes on Attachment Types
 
-The MCP tool `add_bundle_attachment` documentation claims support for "File" and "ExternalLink" types, but **these are not valid API types**. The only valid types are:
+The only valid types are:
 - `ModelVersion` — with `identifier: {"name": "...", "version": N}`
 - `Report` — with `identifier: {"branch": "...", "commit": "...", "source": "git"|"DFS", "filename": "..."}`
 
-The MCP tool also sends `identifier` as a flat string, but the API requires it as a **JSON object**. Therefore, **use direct `curl` calls** for attachments.
+The `identifier` field must be a **JSON object**, not a flat string. Types like "File" or "ExternalLink" are not supported by the API.
 
 ---
 
@@ -81,7 +78,7 @@ Policies define evidence questions via `evidenceSet` items in the YAML. These ap
 
 ### Discovering EvidenceSet IDs
 
-**IMPORTANT**: The `get_governance_bundle` response does NOT contain evidenceSet IDs. You must fetch them from the **policy** endpoint:
+**IMPORTANT**: The bundle response (`GET /bundles/{bundleId}`) does NOT contain evidenceSet IDs. You must fetch them from the **policy** endpoint:
 
 ```bash
 curl -s "$BASE/policies/$POLICY_ID" \
@@ -102,7 +99,7 @@ Each `evidenceSet` entry has:
 
 ### Submitting Answers
 
-**IMPORTANT**: The `submit_evidence_result` MCP tool uses incorrect field names. Use direct `curl` calls with the `submit-result-to-policy` RPC endpoint:
+Use the `submit-result-to-policy` RPC endpoint:
 
 ```bash
 curl -X POST "$BASE/rpc/submit-result-to-policy" \
@@ -122,8 +119,8 @@ curl -X POST "$BASE/rpc/submit-result-to-policy" \
 
 | Field | Description | Where to Find |
 |-------|-------------|---------------|
-| `bundleId` | The bundle ID | From `create_governance_bundle` or `get_governance_bundle` |
-| `policyId` | The policy ID (**NOT** `policyVersionId`) | From `get_governance_bundle` → `policyId` field |
+| `bundleId` | The bundle ID | From `POST /bundles` or `GET /bundles/{id}` |
+| `policyId` | The policy ID (**NOT** `policyVersionId`) | From bundle response → `policyId` field |
 | `evidenceId` | The evidenceSet item UUID | From `GET /policies/{policyId}` → `stages[].evidenceSet[].id` |
 | `content` | Map of `{artifactId: value}` | Keys from `stages[].evidenceSet[].artifacts[].id` |
 
@@ -132,7 +129,7 @@ curl -X POST "$BASE/rpc/submit-result-to-policy" \
 | Input Type | Value Format | Example |
 |------------|-------------|---------|
 | `radio` | String matching an option label | `"Yes"` |
-| `textinput` | Plain text string | `"Claus Murmann"` |
+| `textinput` | Plain text string | `"Jane Smith"` |
 | `textarea` | Multi-line text string | `"Detailed description..."` |
 | `select` | String matching an option label | `"Tier 2 — High"` |
 | `checkbox` | Array of selected option labels | `["Claims prediction", "Reserving"]` |
@@ -147,22 +144,13 @@ curl -X POST "$BASE/rpc/submit-result-to-policy" \
 - If a policy has `classification` rules tied to an artifact, the bundle's `classificationValue` updates automatically
 - The `policyId` field is the policy UUID, NOT the `policyVersionId` — this is a common gotcha
 
-### MCP Tool vs Correct API
-
-| MCP `submit_evidence_result` | Correct API (`submit-result-to-policy`) |
-|-----|-----|
-| `bundleId` | `bundleId` |
-| `evidenceQuestionId` ❌ | `evidenceId` ✅ |
-| `resultValue` ❌ | `content: {artifactId: value}` ✅ |
-| Missing | `policyId` ✅ |
-
 ---
 
 ## Creating Findings
 
-Findings document issues discovered during review. The MCP tool `create_governance_finding` is also incomplete — the API requires additional fields.
+Findings document issues discovered during review.
 
-### Required Fields for Findings API
+### Required Fields
 
 ```bash
 curl -X POST "$BASE/findings" \
@@ -180,18 +168,16 @@ curl -X POST "$BASE/findings" \
   }'
 ```
 
-**Required fields the MCP tool misses**: `policyVersionId`, `name`, `approver` (as object), `assignee` (as object).
-
-Get the `policyVersionId` from the bundle response (`get_governance_bundle`). Get user/org IDs from the `stageApprovals` section of the bundle response.
+Get the `policyVersionId` from the bundle response (`GET /bundles/{bundleId}`). Get user/org IDs from the `stageApprovals` section of the bundle response.
 
 ### Severity Levels
 
 | Severity | When to Use | Example |
 |----------|-------------|---------|
-| Low | Minor concern, no action needed | "Training data has 2% missing values in canton field" |
-| Medium | Should be addressed, not blocking | "High correlation between age and premium features" |
-| High | Must be addressed before deployment | "Model AUC below policy threshold (0.628 < 0.75)" |
-| Critical | Blocks deployment, immediate action | "Data leakage detected — claim_date used as feature" |
+| Low | Minor concern, no action needed | "Training data has 2% missing values in a field" |
+| Medium | Should be addressed, not blocking | "High correlation between two input features" |
+| High | Must be addressed before deployment | "Model AUC below policy threshold" |
+| Critical | Blocks deployment, immediate action | "Data leakage detected — future data used as feature" |
 
 ---
 

@@ -9,16 +9,17 @@ This skill provides knowledge for managing model risk governance in Domino Data 
 
 ## Configuration
 
-The Domino Governance API base path is: `$DOMINO_API_HOST/api/governance/v1`
+```bash
+API_KEY="$DOMINO_USER_API_KEY"
+BASE="${DOMINO_GOVERNANCE_HOST:-$DOMINO_API_HOST}/api/governance/v1"
+```
 
 Some deployments expose governance on a different host than the internal API. If so, set `DOMINO_GOVERNANCE_HOST` to override the base URL. Check `domino_project_settings.md` for project-specific overrides.
-
-The API key is available as the `$DOMINO_USER_API_KEY` environment variable.
 
 ## Key Concepts
 
 ### Policy (Template)
-A **policy** is a reusable governance template that defines the stages, evidence requirements, and approval gates a model must pass through. Examples: SR 11-7, NIST AI RMF, internal model risk frameworks. Policies are created by administrators in the Domino UI; you discover them via `list_governance_policies`.
+A **policy** is a reusable governance template that defines the stages, evidence requirements, and approval gates a model must pass through. Examples: SR 11-7, NIST AI RMF, internal model risk frameworks. Policies are created by administrators in the Domino UI.
 
 ### Bundle (Living Document)
 A **bundle** is the compliance document for a *specific model* in a *specific project*. It follows a policy and accumulates evidence as the model progresses through development, validation, and approval. One project can have multiple bundles (e.g., one per model version).
@@ -36,26 +37,30 @@ A **finding** documents a problem, risk, or concern discovered during review. Fi
 - [BUNDLE-LIFECYCLE.md](./BUNDLE-LIFECYCLE.md) - Stage sequences, creating bundles, progressing stages
 - [EVIDENCE-WORKFLOW.md](./EVIDENCE-WORKFLOW.md) - Attachment types, evidence submission, findings
 
-## MCP Tools Available
+## Governance API Reference
 
-| Tool | Purpose | Limitations |
-|------|---------|-------------|
-| `list_governance_policies` | Discover available policy templates | Works correctly |
-| `create_governance_bundle` | Create a bundle for a model, attach a policy | Works correctly |
-| `get_governance_bundle` | Inspect bundle: stages, attachments, status | Works — but does NOT return evidenceSet IDs |
-| `list_governance_bundles` | List bundles in a project | Works correctly |
-| `add_bundle_attachment` | Attach evidence | **BROKEN** — use `curl` instead (see Step 5) |
-| `submit_evidence_result` | Answer policy evidence questions | **BROKEN** — use `curl` instead (see Step 6) |
-| `update_bundle_stage` | Progress through policy stages | Works correctly |
-| `create_governance_finding` | Document issues during review | **BROKEN** — use `curl` instead (see Step 8) |
+All endpoints are under `$BASE` (`/api/governance/v1`). Authenticate with `X-Domino-Api-Key: $API_KEY`.
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/policy-overviews` | GET | List available policy templates |
+| `/bundles` | POST | Create a new governance bundle |
+| `/bundles/{bundleId}` | GET | Inspect bundle: stages, attachments, status |
+| `/bundles` | GET | List all bundles (filter by `projectId`) |
+| `/bundles/{bundleId}/attachments` | POST | Attach evidence (model versions, reports) |
+| `/rpc/submit-result-to-policy` | POST | Answer policy evidence questions |
+| `/bundles/{bundleId}/stages/{stageId}` | PATCH | Update stage status (In Progress, Complete) |
+| `/policies/{policyId}` | GET | Get full policy with evidenceSet IDs |
+| `/findings` | POST | Create a finding (issue) during review |
 
 ## Standard 8-Step Governance Workflow
 
 Follow these steps when setting up governance for a model:
 
 ### Step 1: Discover Policies
-```
-list_governance_policies
+```bash
+curl -s "$BASE/policy-overviews" \
+  -H "X-Domino-Api-Key: $API_KEY"
 ```
 Review available templates. Note the `id` of the policy you want to use.
 
@@ -63,24 +68,28 @@ Review available templates. Note the `id` of the policy you want to use.
 The project ID is needed to create a bundle. Use the `DOMINO_PROJECT_ID` environment variable (available inside Domino) or look it up via the gateway API.
 
 ### Step 3: Create a Bundle
+```bash
+curl -X POST "$BASE/bundles" \
+  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectId": "your-project-id",
+    "name": "My Model v1.0",
+    "description": "Description of the model being governed",
+    "policyId": "policy-uuid"
+  }'
 ```
-create_governance_bundle(
-    project_id="...",
-    name="My Model v1.0",
-    description="Description of the model being governed",
-    policy_id="..."
-)
-```
-Save the returned `bundle_id`.
+Save the returned `id` as your `BUNDLE_ID`.
 
 ### Step 4: Inspect the Bundle
-```
-get_governance_bundle(bundle_id="...")
+```bash
+curl -s "$BASE/bundles/$BUNDLE_ID" \
+  -H "X-Domino-Api-Key: $API_KEY"
 ```
 This reveals the policy's stage structure, attachments, and approval status. **Note**: This does NOT return evidenceSet IDs — see Step 6 for how to discover those.
 
 ### Step 5: Attach Evidence
-**IMPORTANT**: The `add_bundle_attachment` MCP tool does not work correctly — the API requires `identifier` as a JSON object and only supports types `ModelVersion` and `Report` (not "File" or "ExternalLink"). Use direct `curl` calls instead. See [EVIDENCE-WORKFLOW.md](./EVIDENCE-WORKFLOW.md) for the correct API format.
+See [EVIDENCE-WORKFLOW.md](./EVIDENCE-WORKFLOW.md) for full details. Two attachment types are supported:
 
 ```bash
 # Attach a registered model version
@@ -98,8 +107,6 @@ curl -X POST "$BASE/bundles/$BUNDLE_ID/attachments" \
 
 Evidence questions are the interactive forms shown in the Domino UI under each stage's "Evidence" tab. They are defined in the policy YAML as `evidenceSet` items.
 
-**IMPORTANT**: The `submit_evidence_result` MCP tool uses incorrect field names and endpoint. Use direct `curl` calls instead.
-
 #### 6a. Discover EvidenceSet IDs
 
 EvidenceSet IDs are NOT in the bundle response. Fetch them from the **policy** endpoint:
@@ -112,8 +119,6 @@ curl -s "$BASE/policies/$POLICY_ID" \
 The response contains `stages[]` → `evidenceSet[]` → `artifacts[]` with full UUIDs for each evidence item and artifact.
 
 #### 6b. Submit Answers
-
-Use the `submit-result-to-policy` RPC endpoint:
 
 ```bash
 curl -X POST "$BASE/rpc/submit-result-to-policy" \
@@ -139,17 +144,14 @@ curl -X POST "$BASE/rpc/submit-result-to-policy" \
 
 ### Step 7: Progress Stages
 As evidence is collected and approvals obtained:
-```
-update_bundle_stage(
-    bundle_id="...",
-    stage_id="...",
-    status="Complete"
-)
+```bash
+curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
+  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "Complete"}'
 ```
 
 ### Step 8: Document Findings (if any)
-**Note**: The `create_governance_finding` MCP tool is incomplete — the API also requires `policyVersionId`, `name`, `approver` (object), and `assignee` (object). Use a direct `curl` call:
-
 ```bash
 curl -X POST "$BASE/findings" \
   -H "X-Domino-Api-Key: $API_KEY" -H "Content-Type: application/json" \
@@ -161,10 +163,10 @@ curl -X POST "$BASE/findings" \
     "description": "Detailed description...",
     "severity": "High",
     "approver": {"id": "org-uuid", "name": "model-gov-org"},
-    "assignee": {"id": "user-uuid", "name": "claus_murmann"}
+    "assignee": {"id": "user-uuid", "name": "username"}
   }'
 ```
-Get the `policyVersionId` and user/org IDs from `get_governance_bundle` response.
+Get the `policyVersionId` and user/org IDs from the bundle response (Step 4).
 
 ## Viewing in Domino UI
 

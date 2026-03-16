@@ -11,7 +11,7 @@ Model Initiation → Development → Validation & Testing → Deployment Approva
 ```
 
 Each stage has:
-- **Stage ID**: A UUID (discovered via `get_governance_bundle` → `stages[]`)
+- **Stage ID**: A UUID (discovered via `GET /bundles/{bundleId}` → `stages[]`)
 - **Name**: Human-readable label
 - **Approvals**: Organizations that must sign off before the stage can advance
 - **EvidenceSet**: Form-based questions to be answered (discovered via `GET /policies/{policyId}`)
@@ -27,17 +27,19 @@ Policies with `enforceSequentialOrder: true` require stages to be completed in o
 
 ### Prerequisites
 1. **Project ID**: Available as `DOMINO_PROJECT_ID` env var inside Domino, or from the bundle creation response
-2. **Policy ID**: Discover via `list_governance_policies`
+2. **Policy ID**: Discover via `GET /policy-overviews`
 
 ### Create the Bundle
-```python
-# Via MCP tool
-create_governance_bundle(
-    project_id="64a1b2c3d4e5f6...",
-    name="My Model v1.0",
-    description="Description of the model being governed",
-    policy_id="pol_abc123..."
-)
+```bash
+curl -X POST "$BASE/bundles" \
+  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectId": "your-project-id",
+    "name": "My Model v1.0",
+    "description": "Description of the model being governed",
+    "policyId": "policy-uuid"
+  }'
 ```
 
 The response includes:
@@ -59,8 +61,9 @@ Best practice: create a new bundle for each significant model version. This keep
 
 After creating a bundle, inspect it to find the stage IDs:
 
-```python
-bundle = get_governance_bundle(bundle_id="...")
+```bash
+curl -s "$BASE/bundles/$BUNDLE_ID" \
+  -H "X-Domino-Api-Key: $API_KEY"
 ```
 
 The response includes a `stages` array:
@@ -85,22 +88,20 @@ curl -s "$BASE/policies/$POLICY_ID" -H "X-Domino-Api-Key: $API_KEY"
 
 ### Starting a Stage
 When you begin work on a stage:
-```python
-update_bundle_stage(
-    bundle_id="...",
-    stage_id="stg_abc123",
-    status="In Progress"
-)
+```bash
+curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
+  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "In Progress"}'
 ```
 
 ### Completing a Stage
 After all evidence is attached and questions answered:
-```python
-update_bundle_stage(
-    bundle_id="...",
-    stage_id="stg_abc123",
-    status="Complete"
-)
+```bash
+curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
+  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "Complete"}'
 ```
 
 If the policy enforces gating and required questions are unanswered, this may fail.
@@ -124,8 +125,9 @@ Each stage has designated approver organizations. Approval typically requires a 
 ## Checking Bundle Status
 
 At any point, inspect the current state:
-```python
-bundle = get_governance_bundle(bundle_id="...")
+```bash
+curl -s "$BASE/bundles/$BUNDLE_ID" \
+  -H "X-Domino-Api-Key: $API_KEY"
 ```
 
 Look at:
@@ -138,8 +140,9 @@ Look at:
 ## Listing All Bundles in a Project
 
 To see all bundles:
-```python
-list_governance_bundles(project_id="64a1b2c3d4e5f6...")
+```bash
+curl -s "$BASE/bundles?projectId=$PROJECT_ID" \
+  -H "X-Domino-Api-Key: $API_KEY"
 ```
 
 This returns summaries of all bundles, useful for checking if a bundle already exists before creating a duplicate.
