@@ -1,5 +1,14 @@
 {
-  "name": "domino-claude-plugin",
-  "description": "Domino Data Lab plugin for Claude Code",
-  "version": "1.0.0"
+  "name": "dominodatalab",
+  "version": "1.0.0",
+  "description": "Full Domino Data Lab platform support — workspaces, jobs, model deployment, experiment tracking, GenAI tracing, Spark/Ray/Dask, and app deployment for data science teams",
+  "author": {
+    "name": "Domino Data Lab",
+    "url": "https://www.domino.ai"
+  },
+  "homepage": "https://github.com/dominodatalab/domino-claude-plugin",
+  "repository": "https://github.com/dominodatalab/domino-claude-plugin",
+  "license": "MIT",
+  "keywords": ["domino", "mlops", "data-science", "machine-learning","experiment-tracking","genai-tracing","spark","ray","dask","app-deployment"]
 }
+
