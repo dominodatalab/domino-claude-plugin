@@ -9,61 +9,84 @@ A Domino policy YAML file has these top-level keys:
 ```yaml
 enforceSequentialOrder: true|false    # Optional: gates stages sequentially
 classification:                       # Optional: risk classification config
-  rule: <string>                      # Classification logic (Go-like expression)
-  artifacts:                          # List of aliased input artifact IDs
+  rule: <string>                      # Classification logic (Go-like expression or named rule)
+  artifacts:                          # List of aliased input artifact IDs used for classification
     - <alias-name>
 stages:                               # Required: list of workflow stages
-  - name: <stage-name>
-    artifacts: [...]                  # Direct evidence in the stage
-    approvers: [...]                  # Approver config
-    evidence: [...]                   # Evidence for approvals
+  - policyEntityId: <uuid>           # Required UUID for each stage
+    name: <stage-name>
+    evidenceSet:                      # Array of evidence containers for this stage
+      - description: <text>
+        definition: [...]             # Array of artifact definitions
+        id: Local.<kebab-case>
+        name: <display-name>
+    approvals:                        # Array of approval definitions for this stage
+      - policyEntityId: <uuid>
+        name: <approval-name>
+        approvers:
+          - name: <org-name>
+            showByDefault: true|false
+            editable: true|false
+        evidence:                     # Evidence collected as part of this approval
+          id: Local.<kebab-case>
+          name: <display-name>
+          description: <text>
+          definition: [...]
 gates:                                # Optional: gating rules
   - name: <gate-name>
     rules: [...]
     approvals: [...]
-approvers:                            # Optional: top-level approver defaults
-  - name: <org-name>
-    showByDefault: true|false
-    editable: true|false
-evidenceSet:                          # Optional: reusable evidence definitions
-  - id: Local.<id>
-    name: <display-name>
-    description: <text>
-    definition: [...]
 ```
 
 ## Stages
 
-Stages organize the workflow. Each stage has a name, optional artifacts (evidence), and optional approvals.
+Each stage has a `policyEntityId`, a `name`, an `evidenceSet` array (the questions/inputs for that stage), and an `approvals` array.
 
 ```yaml
 stages:
-  - name: 'Stage 1: Initial Review'
-  - name: 'Stage 2: Validation'
+  - policyEntityId: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+    name: 'Stage 1: Initial Review'
+    evidenceSet:
+      - description: Describe what evidence is collected here
+        definition:
+          - policyEntityId: b2c3d4e5-f6a7-8901-bcde-f12345678901
+            artifactType: input
+            aliasForClassification: question-label-slug
+            details:
+              label: "Your question here?"
+              type: radio
+              options:
+                - Yes
+                - No
+        id: Local.stage-1-evidence
+        name: Stage 1 Evidence
+    approvals:
+      - policyEntityId: c3d4e5f6-a7b8-9012-cdef-123456789012
+        name: 'Stage 1 Sign Off'
+        approvers:
+          - name: model-gov-org
+            showByDefault: true
+            editable: false
+        evidence:
+          id: Local.stage-1-signoff
+          name: Stage 1 Approval
+          description: Review and approve stage 1
+          definition:
+            - policyEntityId: d4e5f6a7-b8c9-0123-defa-234567890123
+              artifactType: input
+              details:
+                label: "Do you approve this stage?"
+                options:
+                  - Approved
+                  - Approved with Conditions
+                  - Not Approved
+                type: radio
 ```
 
-### Approvals Within Stages
-
-Each approval has a name, approvers, and optional evidence:
-
-```yaml
-stages:
-  - name: 'Stage 1: Review'
-    approvers:
-      - <org-name>
-    evidence:
-      id: Local.<evidence-id>
-      name: <display-name>
-      description: <text>
-      definition:
-        - artifactType: input
-          details:
-            label: "Question text?"
-            type: radio
-            options:
-              - Yes
-              - No
-```
+> **Key structural rules:**
+> - `evidenceSet` is nested **inside each stage** (not at the top level of the document)
+> - `approvals` is an array of approval objects, each with its own `policyEntityId`, `name`, `approvers`, and `evidence`
+> - `approvers` is nested inside each approval object (not at the stage level)
 
 ### Sequential Workflows
 
@@ -75,28 +98,34 @@ approvers:
     editable: false
 ```
 
-## Evidence and Evidence Sets
+## Evidence Sets
 
-Evidence sets are reusable containers for inputs, checks, and guidance.
+Evidence sets are the containers for inputs, checks, and guidance within a stage. They are defined **inside each stage** under the `evidenceSet` key (not at the top level of the document).
 
 ```yaml
-evidenceSet:
-  - id: Local.<set-id>
-    name: <display-name>
-    description: <text>
-    definition:
-      - artifactType: <type>
-        details: { ... }
+stages:
+  - policyEntityId: <uuid>
+    name: Stage Name
+    evidenceSet:                   # ← nested inside the stage
+      - description: <text>
+        definition:
+          - artifactType: <type>
+            details: { ... }
+        id: Local.<set-id>
+        name: <display-name>
 ```
 
 ### Visibility on Evidence Sets
 
 ```yaml
-evidenceSet:
-  - id: Global.<id>
-    visibility:
-      conditions:
-        - when: classification == "High"
+stages:
+  - name: Stage Name
+    evidenceSet:
+      - id: Local.<id>
+        visibility:
+          conditions:
+            - when: classification == "High"
+        definition: [...]
 ```
 
 ## Input Artifact Types
@@ -150,16 +179,16 @@ Radio options can also be simple strings:
 
 ### Select Dropdown (single select)
 
+Options can be plain strings (preferred) or `{label, value}` objects:
+
 ```yaml
 - artifactType: input
   details:
     type: select
     label: "Select the base model template."
     options:
-      - label: "Template A"
-        value: "templateA"
-      - label: "Template B"
-        value: "templateB"
+      - "Template A"
+      - "Template B"
 ```
 
 ### Multi-Select Dropdown
@@ -167,14 +196,16 @@ Radio options can also be simple strings:
 ```yaml
 - artifactType: input
   details:
-    type: multiSelect
+    type: multiselect
     label: "Select the data sets used."
     options:
-      - label: "Data set 1"
-        value: "dataset1"
-      - label: "Data set 2"
-        value: "dataset2"
+      - "Data set 1"
+      - "Data set 2"
 ```
+
+> **Important:** The type value is `multiselect` (all lowercase). The API rejects `multiSelect` (camelCase).
+
+> **Options format:** Plain strings (`- "Value"`) work for all input types (radio, select, multiselect, checkbox). The `{label: "...", value: "..."}` object format also works but plain strings are simpler and preferred.
 
 ### Checkbox Group
 
@@ -322,23 +353,25 @@ Link an input to classification with `aliasForClassification`:
 classification:
   rule: <rule-expression>
   artifacts:
-    - <alias-name>
+    - <alias-name>           # must match aliasForClassification on the input
 
 stages:
-  - name: classificationExample
-    artifacts:
-      - id: Local.<artifact-id>
-        name: <display-name>
-        description: <text>
+  - policyEntityId: <uuid>
+    name: classificationExample
+    evidenceSet:             # ← use evidenceSet, not artifacts
+      - description: <text>
         definition:
-          - artifactType: input
-            aliasForClassification: <alias-name>
+          - policyEntityId: <uuid>
+            artifactType: input
+            aliasForClassification: <alias-name>   # ← links to classification.artifacts
             details:
               label: "Risk rating?"
               type: radio
               options:
                 - High
                 - Low
+        id: Local.<artifact-id>
+        name: <display-name>
 ```
 
 ### Classification Rules

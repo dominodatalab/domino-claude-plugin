@@ -73,7 +73,7 @@ Read through the extracted text and identify these elements:
    - Short text answers → `textinput`
    - Long text answers → `textarea`
    - Pick-one-from-list → `select`
-   - Pick-many-from-list → `multiSelect` or `checkbox`
+   - Pick-many-from-list → `multiselect` or `checkbox`
    - Date fields → `date`
    - Numeric thresholds → `numeric`
    - Document uploads required → `file` (under `metadata` artifactType)
@@ -125,8 +125,8 @@ Every `policyEntityId` must be a unique UUID v4. Generate them with Python:
 import uuid
 str(uuid.uuid4())
 ```
-Place `policyEntityId` as the **first key** in every stage, evidence set item, approval, and
-individual artifact definition.
+Place `policyEntityId` as the **first key** in every stage, approval, and individual artifact
+definition. Note: `evidenceSet` container items do **not** need a `policyEntityId`.
 
 ### Structure
 - Start with top-level `classification` (if needed), then `stages`
@@ -266,9 +266,9 @@ Use `present_files` to share the file with the user.
 Before presenting the output, verify:
 
 - [ ] All YAML is valid (proper indentation, no syntax errors — validate with `yaml.safe_load()`)
-- [ ] Every stage, evidence set item, approval, and artifact has a unique `policyEntityId` (UUID v4)
+- [ ] Every stage, approval, and artifact has a unique `policyEntityId` (UUID v4); evidenceSet container items do NOT need one
 - [ ] Every `artifactType` is one of: `input`, `metadata`, `guidance`, `policyScriptedCheck`, `policyMonitoringCheck`
-- [ ] Every input `type` is one of: `radio`, `textinput`, `textarea`, `select`, `multiSelect`, `checkbox`, `date`, `numeric`
+- [ ] Every input `type` is one of: `radio`, `textinput`, `textarea`, `select`, `multiselect`, `checkbox`, `date`, `numeric` (all lowercase — `multiselect` not `multiSelect`)
 - [ ] Every input artifact has an `aliasForClassification` (kebab-case slug of the label)
 - [ ] Every `id` follows the `Local.<kebab-case>` pattern
 - [ ] Every stage has an `evidenceSet` array (not flat `evidence`)
