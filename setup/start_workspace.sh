@@ -94,14 +94,14 @@ fi
 # ── 6. Register plugins (skills, commands, agents) ─────────────────────
 PLUGIN_DIR="/mnt/code/domino-claude-plugin"
 
-mv $PLUGIN_DIR/skills /mnt/code/.claude/
-mv $PLUGIN_DIR/commands /mnt/code/.claude/
-mv $PLUGIN_DIR/agents /mnt/code/.claude/
-mv $PLUGIN_DIR/output-styles /mnt/code/.claude/
+cp -r $PLUGIN_DIR/skills /mnt/code/.claude/
+cp -r $PLUGIN_DIR/commands /mnt/code/.claude/
+cp -r $PLUGIN_DIR/agents /mnt/code/.claude/
+cp -r $PLUGIN_DIR/output-styles /mnt/code/.claude/
 
 echo "[✓] Registered $(ls /mnt/code/.claude/skills/ 2>/dev/null | wc -l) skills, $(ls /mnt/code/.claude/commands/ 2>/dev/null | wc -l) commands, $(ls /mnt/code/.claude/agents/ 2>/dev/null | wc -l) agents"
 # Cleanup
-mv $PLUGIN_DIR/.* /mnt/code/
-mv $PLUGIN_DIR/* /mnt/code/
+cp $PLUGIN_DIR/setup/.* /mnt/code/
+cp $PLUGIN_DIR/setup/* /mnt/code/
 rm -rf $PLUGIN_DIR
 echo "=== Claude Code setup complete ==="
