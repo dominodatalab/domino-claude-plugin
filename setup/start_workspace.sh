@@ -117,5 +117,4 @@ if [ ! -e /mnt/code/.claude/settings.json ]; then
 fi
 cp $PLUGIN_DIR/setup/CLAUDE.md /mnt/code/
 cp $PLUGIN_DIR/setup/domino_project_settings.md /mnt/code/
-rm -rf $PLUGIN_DIR
 echo "=== Claude Code setup complete ==="
