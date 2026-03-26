@@ -11,12 +11,10 @@ set -e
 
 echo "=== Claude Code Workspace Setup ==="
 
-# ── 1. Install Claude Code if not present ──────────────────────────────
-if ! command -v claude &> /dev/null; then
-    echo "[!] Claude Code not found. Installing via native installer..."
-    curl -fsSL https://claude.ai/install.sh | bash
-    export PATH="$HOME/.local/bin:$PATH"
-fi
+# ── 1. Install latest version of Claude Code──────────────────────────────
+echo "[!] Installing latest version of Claude Code via native installer..."
+curl -fsSL https://claude.ai/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
 
 echo "[✓] Claude Code version: $(claude --version 2>/dev/null || echo 'installed')"
 
