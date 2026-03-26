@@ -1,7 +1,4 @@
 {
-  "plugins": [
-    "/mnt/imported/code/domino-data-lab-plugin"
-  ],
   "permissions": {
     "allow": [
       "Bash(git *)",

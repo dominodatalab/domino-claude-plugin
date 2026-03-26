@@ -43,3 +43,6 @@ server.
 - When building Domino apps, bind to `0.0.0.0` (not localhost).
 - Use `base: './'` in Vite config for React apps behind Domino's proxy.
 - Create an `app.sh` as the launch file entry point.
+
+## MCP
+Update domino_project_settings.md placeholder values with the real Domino project name and username, which are available as environment variables
