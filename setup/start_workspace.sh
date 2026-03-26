@@ -101,6 +101,7 @@ cp -r $PLUGIN_DIR/skills/* /mnt/code/.claude/skills/
 cp -r $PLUGIN_DIR/commands /mnt/code/.claude/
 cp -r $PLUGIN_DIR/agents /mnt/code/.claude/
 cp -r $PLUGIN_DIR/output-styles /mnt/code/.claude/
+cp -r $PLUGIN_DIR/mcp-servers /mnt/code/.claude/
 
 echo "[✓] Registered $(ls /mnt/code/.claude/skills/ 2>/dev/null | wc -l) skills, $(ls /mnt/code/.claude/commands/ 2>/dev/null | wc -l) commands, $(ls /mnt/code/.claude/agents/ 2>/dev/null | wc -l) agents"
 # Cleanup
