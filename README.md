@@ -14,6 +14,7 @@ This plugin enables Claude Code to help you with all aspects of Domino Data Lab,
 - **Models**: Deploy, monitor, and manage model endpoints
 - **GenAI**: Trace and evaluate AI agents with the Domino SDK
 - **Distributed Computing**: Spark, Ray, and Dask clusters
+- **Governance**: Model governance policies, evidence workflows, and policy YAML generation
 - **And more...**
 
 ## Installation
@@ -198,14 +199,20 @@ Then restart Claude Code. If installed via `--plugin-dir`, pull updates in the c
 
 ### Bundled MCP Server
 
-The plugin includes a vendored copy of the [Domino MCP Server](https://github.com/dominodatalab/domino_mcp_server) that **starts automatically** when the plugin is enabled. It provides tools for running Domino jobs, checking job status/results, and syncing files with DFS-based projects.
+The plugin includes a vendored copy of the [Domino MCP Server](https://github.com/dominodatalab/domino_mcp_server) that **starts automatically** when the plugin is enabled. It provides 10 tools including:
+
+- Running Domino jobs and checking job status/results
+- Listing, uploading, and downloading project files
+- Syncing local files to DFS-based projects
+- Querying compute environment info
+- Opening Domino URLs in a web browser
 
 - **Inside a Domino workspace:** Fully automatic — authentication uses ephemeral tokens, project info is auto-detected.
 - **Outside Domino (laptop):** Set `DOMINO_API_KEY` and `DOMINO_HOST` as environment variables in your shell.
 
 Requires `uv` to be installed (see [Prerequisites](#prerequisites)).
 
-### Skills (18 Total)
+### Skills (21 Total)
 
 | Skill | Description |
 | --- | --- |
@@ -228,6 +235,8 @@ Requires `uv` to be installed (see [Prerequisites](#prerequisites)).
 | `domino-python-sdk` | Python SDK (python-domino) and REST API |
 | `domino-data-sdk` | Data SDK (domino-data) for data sources, datasets, training sets |
 | `domino-ui-design` | Knowledge on Domino UI styling for integrated App design |
+| `domino-governance` | Model governance lifecycle, evidence workflows, and bundle management |
+| `domino-governance-policy-builder` | Convert policy documents into Domino governance policy YAML |
 
 ### Slash Commands
 
@@ -273,7 +282,7 @@ domino-claude-plugin/
 ├── output-styles/           # Custom output styles
 │   ├── domino-learning.md
 │   └── domino-mlops.md
-├── skills/                  # 18 skill directories
+├── skills/                  # 21 skill directories
 │   ├── workspaces/
 │   ├── jobs/
 │   ├── environments/
@@ -291,7 +300,10 @@ domino-claude-plugin/
 │   ├── modeling-assistant/
 │   ├── data-connectivity/
 │   ├── python-sdk/
-│   └── domino-data-sdk/
+│   ├── domino-data-sdk/
+│   ├── domino-ui-design/
+│   ├── domino-governance/
+│   └── domino-governance-policy-builder/
 ├── commands/                # Slash commands
 ├── hooks/                   # Example automation hooks
 ├── templates/               # Code templates
@@ -300,6 +312,11 @@ domino-claude-plugin/
 │   ├── dash/
 │   ├── experiment/
 │   └── tracing/
+├── setup/                   # Workspace setup scripts and config
+│   ├── CLAUDE.md
+│   ├── domino_project_settings.md
+│   ├── start_workspace.sh
+│   └── README.md
 ├── CONTRIBUTING.md
 ├── LICENSE
 └── README.md
@@ -362,6 +379,7 @@ The `domino-python-sdk` skill includes comprehensive REST API documentation:
 - `API-ENVIRONMENTS.md` — Environments, revisions
 - `API-APPS.md` — Apps, versions, instances
 - `API-ADMIN.md` — Users, orgs, hardware tiers
+- `API-REFERENCE.md` — General API reference and authentication
 
 ---
 

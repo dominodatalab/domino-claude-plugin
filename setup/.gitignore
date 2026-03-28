@@ -1,0 +1,29 @@
+.Trash*
+
+# Claude Code runtime state (persisted via symlink to /mnt/artifacts/)
+.claude
+.claude/*
+.claude/projects/
+.claude/statsig/
+.claude/todos/
+.claude/credentials.json
+.claude/settings.local.json
+.claude/plugins/
+# Node/npm
+node_modules/
+.npm-global/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+*checkpoint*
