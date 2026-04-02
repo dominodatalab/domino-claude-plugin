@@ -414,43 +414,113 @@ Grafana is embedded in Domino at `https://<your-domino-domain>/grafana` and `/gr
 
 **UI path:** Admin > Advanced > Grafana Monitoring
 
-**To query programmatically:** Generate a Grafana service account token in the Grafana UI (Administration > Service Accounts), then use the Grafana HTTP API:
+**To query programmatically:** Generate a Grafana service account token in the Grafana UI (Administration > Service Accounts), then use the Grafana HTTP API.
+
+Confirmed working credentials for this deployment:
+- External URL: `https://cloud-dogfood.domino.tech/grafana`
+- Service account token: stored in `GRAFANA_TOKEN` env var
+- Default Prometheus datasource UID: `DominoPrometheus` (id: 1)
+- Cost Analyzer Prometheus datasource UID: `780642e7-bd29-459d-8263-1a0b67134cbc` (id: 2)
 
 ```python
 import os, requests
 
-# External Domino URL (not the internal nucleus-frontend hostname)
-DOMINO_EXTERNAL = "https://<your-domino-domain>"
-GRAFANA_BASE = f"{DOMINO_EXTERNAL}/grafana/api"
-GRAFANA_HEADERS = {"Authorization": "Bearer <grafana-service-account-token>"}
+GRAFANA_BASE = "https://cloud-dogfood.domino.tech/grafana/api"
+GRAFANA_HEADERS = {"Authorization": f"Bearer {os.environ['GRAFANA_TOKEN']}"}
 
-# List dashboards
-resp = requests.get(f"{GRAFANA_BASE}/search?type=dash-db", headers=GRAFANA_HEADERS)
-dashboards = resp.json()
+def grafana_get(path, **params):
+    resp = requests.get(f"{GRAFANA_BASE}{path}", headers=GRAFANA_HEADERS, params=params or None)
+    resp.raise_for_status()
+    return resp.json()
 
-# Query Prometheus via Grafana datasource proxy
-resp = requests.get(
-    f"{GRAFANA_BASE}/datasources/proxy/1/api/v1/query_range",
-    headers=GRAFANA_HEADERS,
-    params={
-        "query": "count by (phase) (kube_pod_status_phase{namespace='domino-compute'})",
-        "start": "1h",
-        "end": "now",
-        "step": "60",
-    }
-)
+def promql(query, start="now-1h", end="now", step="60s", datasource_id=1):
+    """Query Prometheus via Grafana datasource proxy."""
+    resp = requests.get(
+        f"{GRAFANA_BASE}/datasources/proxy/{datasource_id}/api/v1/query_range",
+        headers=GRAFANA_HEADERS,
+        params={"query": query, "start": start, "end": end, "step": step},
+    )
+    resp.raise_for_status()
+    return resp.json()["data"]["result"]
+
+def promql_instant(query, datasource_id=1):
+    """Instant PromQL query (current value)."""
+    resp = requests.get(
+        f"{GRAFANA_BASE}/datasources/proxy/{datasource_id}/api/v1/query",
+        headers=GRAFANA_HEADERS,
+        params={"query": query},
+    )
+    resp.raise_for_status()
+    return resp.json()["data"]["result"]
 ```
 
-### Key Dashboards
+### Key Dashboards (confirmed UIDs)
 
-| Dashboard | What It Shows |
-|---|---|
-| **Domino / Views / Workloads** | Active executions by type/tier, pod phases, startup time by user |
-| **Domino Execution Overview** | Launch rate, success rate, failure reasons, node pool scaling |
-| **Execution Monitoring** | Time to Available, startup phase breakdown (NodeAssigned → ImagesPulled → VolumesMounted → FilesPrepared → Running) |
-| **Model Endpoint Monitoring** | HTTP status codes, P50/P90/P95/P99 latency, RPS, CPU/memory/restarts |
-| **Kubernetes / Nodes** | Node-level CPU/memory/disk across cluster |
-| **Cluster Autoscaler** | Scale-up/down events, pending pods, node pool sizes |
+| UID | Dashboard | What It Shows |
+|---|---|---|
+| `domino-views-workloads` | Domino / Views / Workloads | Active executions by type/tier, pod phases, startup time by user |
+| `domino_execution_overview` | Domino Execution Overview | Launch rate, success/failure counts, node pool scaling |
+| `model-endpoint-monitoring` | Models Endpoint Monitoring | HTTP status codes, P50–P99 latency, RPS, CPU/memory/restarts |
+| `domino_gpu_workspace_dataplanes` | GPU Utilization by Workspace | Per-workspace GPU utilization across data planes |
+| `k8s_views_nodes3` | Kubernetes / Views / Nodes | Node-level CPU/memory/disk |
+| `cluster_autoscaler_overview` | Kubernetes / System / Cluster Autoscaler | Scale-up/down events, pending pods |
+| `k8s_views_pods` | Kubernetes / Views / Pods | Per-pod CPU/memory in any namespace |
+| `karpenter` | Karpenter | Node provisioning events and pool state |
+| `kubecost` | Kubecost - Billing Tags | Cost by billing tag |
+| `genai-models` | GenAI Overview | LLM endpoint traffic and performance |
+| `domino-admin-toolkit` | Domino Admin Toolkit | Admin-level platform health |
+
+```python
+# Fetch and print all panels in a dashboard
+def list_dashboard_panels(uid):
+    d = grafana_get(f"/dashboards/uid/{uid}")
+    for panel in d["dashboard"].get("panels", []):
+        print(f"  [{panel['id']:3d}] {panel.get('title','(untitled)')}")
+
+list_dashboard_panels("domino-views-workloads")
+```
+
+### Useful PromQL Queries (Prometheus datasource id=1)
+
+```python
+# Active Domino execution pods (by phase)
+promql_instant("count by (phase) (kube_pod_status_phase{namespace='domino-compute'})")
+
+# CPU usage per execution pod (top consumers)
+promql_instant(
+    "topk(20, sum by (pod) (rate(container_cpu_usage_seconds_total"
+    "{namespace='domino-compute', container!=''}[5m])) * 100)"
+)
+
+# Memory usage per execution pod (GiB)
+promql_instant(
+    "topk(20, sum by (pod) (container_memory_working_set_bytes"
+    "{namespace='domino-compute', container!=''})) / 1e9"
+)
+
+# GPU utilization per pod
+promql_instant(
+    "sum by (pod) (DCGM_FI_DEV_GPU_UTIL{namespace='domino-compute'})"
+)
+
+# CPU/memory for a specific run (match pod name to run ID)
+run_id = "69ce9a6589f63840b4992c0d"
+cpu = promql(
+    f"rate(container_cpu_usage_seconds_total{{namespace='domino-compute',"
+    f"pod=~'run-{run_id}.*', container!=''}}"  "[5m]) * 100",
+    start="now-4h", end="now", step="60s"
+)
+
+# Node pool utilization (allocatable vs requested)
+promql_instant(
+    "1 - (sum by (node) (kube_node_status_allocatable{resource='cpu'})"
+    " - sum by (node) (kube_pod_container_resource_requests{resource='cpu',namespace='domino-compute'}))"
+    " / sum by (node) (kube_node_status_allocatable{resource='cpu'})"
+)
+
+# Pending pods (nodes not yet available)
+promql_instant("count(kube_pod_status_phase{namespace='domino-compute', phase='Pending'})")
+```
 
 ---
 
