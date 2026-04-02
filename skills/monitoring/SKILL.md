@@ -286,81 +286,171 @@ curl -s "$BASE/vllm-token-metrics" -H "X-Domino-Api-Key: $DOMINO_API_KEY"
 
 ---
 
-## 6. Grafana Dashboards
+## 6. New Relic (Infrastructure & APM Metrics)
 
-Grafana is embedded in Domino and accessible to SysAdmins. Regular users can be granted access.
+This Domino deployment uses New Relic for cluster-level observability. The New Relic agents inject metadata into every execution pod (`NEW_RELIC_METADATA_KUBERNETES_*` env vars), so all pod metrics are tagged with Domino project, namespace, node, and cluster.
 
-### Access URLs
+**Confirmed account details (from this deployment):**
+- Account ID: `4131420`
+- Cluster: `cloud-dogfood`
+- Namespace: `domino-compute`
+
+### Querying New Relic via NerdGraph (GraphQL)
+
+The NerdGraph API at `https://api.newrelic.com/graphql` is reachable from Domino workspace pods. It requires a **New Relic User API key** — get one from [one.newrelic.com](https://one.newrelic.com) under Account > API Keys > User key.
+
+> The browser license key (`NRJS-...`) visible in the Domino UI source is **write-only** and cannot be used to query data.
+
+```bash
+export NR_API_KEY="NRAK-..."  # your User API key
+export NR_ACCOUNT_ID="4131420"
+
+# Run a NRQL query via NerdGraph
+curl -s -X POST "https://api.newrelic.com/graphql" \
+  -H "Content-Type: application/json" \
+  -H "API-Key: $NR_API_KEY" \
+  -d "{
+    \"query\": \"{ actor { account(id: $NR_ACCOUNT_ID) { nrql(query: \\\"SELECT average(cpuPercent) FROM SystemSample FACET podName SINCE 1 hour ago\\\") { results } } } }\"
+  }" | python3 -m json.tool
 ```
-https://<domino-domain>/grafana              # Platform/infrastructure dashboards
-https://<domino-domain>/grafana-workload     # Workload execution dashboards (Cloud)
+
+### Python Helper
+
+```python
+import os, requests
+
+NR_API_KEY = os.environ["NR_API_KEY"]   # New Relic User API key
+NR_ACCOUNT_ID = 4131420
+
+def nrql_query(nrql: str) -> list:
+    """Run a NRQL query and return the results list."""
+    query = """
+    {
+      actor {
+        account(id: %d) {
+          nrql(query: "%s") {
+            results
+          }
+        }
+      }
+    }
+    """ % (NR_ACCOUNT_ID, nrql.replace('"', '\\"'))
+
+    resp = requests.post(
+        "https://api.newrelic.com/graphql",
+        headers={"Content-Type": "application/json", "API-Key": NR_API_KEY},
+        json={"query": query},
+    )
+    resp.raise_for_status()
+    return resp.json()["data"]["actor"]["account"]["nrql"]["results"]
 ```
+
+### Useful NRQL Queries for Domino Workloads
+
+```python
+# CPU usage by pod in domino-compute namespace (last hour)
+results = nrql_query(
+    "SELECT average(cpuPercent) FROM SystemSample "
+    "WHERE namespaceName = 'domino-compute' "
+    "FACET podName SINCE 1 hour ago LIMIT 50"
+)
+
+# Memory usage by pod
+results = nrql_query(
+    "SELECT average(memoryUsedBytes) / 1e9 AS 'memory_GiB' FROM SystemSample "
+    "WHERE namespaceName = 'domino-compute' "
+    "FACET podName SINCE 1 hour ago LIMIT 50"
+)
+
+# Pod CPU over time (time series)
+results = nrql_query(
+    "SELECT average(cpuPercent) FROM SystemSample "
+    "WHERE podName = 'run-<jobId>-xxxxx' "
+    "TIMESERIES 1 minute SINCE 2 hours ago"
+)
+
+# Node-level resource utilization
+results = nrql_query(
+    "SELECT average(cpuPercent), average(memoryUsedPercent) FROM SystemSample "
+    "WHERE clusterName = 'cloud-dogfood' "
+    "FACET nodeName SINCE 1 hour ago"
+)
+
+# GPU utilization (if NR GPU agent is installed)
+results = nrql_query(
+    "SELECT average(gpu.utilization) FROM NvidiaSmiSample "
+    "FACET podName SINCE 1 hour ago"
+)
+
+# Container restart count (stability signal)
+results = nrql_query(
+    "SELECT sum(restartCount) FROM K8sContainerSample "
+    "WHERE namespaceName = 'domino-compute' "
+    "FACET containerName, podName SINCE 24 hours ago"
+)
+```
+
+### Finding the Pod Name for a Specific Run
+
+New Relic metrics are tagged by pod name. Domino pod names follow the pattern `run-<runId>-<suffix>`. Match your run ID from the runs API to the pod name:
+
+```python
+run_id = "69ce9a6589f63840b4992c0d"  # from /v4/gateway/runs or /api/jobs/beta/jobs
+
+results = nrql_query(
+    f"SELECT average(cpuPercent), average(memoryUsedPercent) FROM SystemSample "
+    f"WHERE podName LIKE 'run-{run_id}%' "
+    f"TIMESERIES 1 minute SINCE 4 hours ago"
+)
+```
+
+---
+
+## 7. Grafana Dashboards
+
+Grafana is embedded in Domino at `https://<your-domino-domain>/grafana` and `/grafana-workload`.
+
+**Access:** Browser only — requires Domino SSO session. SysAdmins get Grafana Admin automatically. The path returns 403 when accessed without a valid browser session; it cannot be reached with just a Domino API key from inside a workspace pod.
 
 **UI path:** Admin > Advanced > Grafana Monitoring
 
-**Auth:** SSO via your Domino session (SysAdmins get Grafana Admin automatically).
+**To query programmatically:** Generate a Grafana service account token in the Grafana UI (Administration > Service Accounts), then use the Grafana HTTP API:
 
-If SSO fails, retrieve the local admin password:
-```bash
-kubectl get secret -n domino-platform grafana \
-  -ojsonpath='{.data.admin-password}' | base64 -d
+```python
+import os, requests
+
+# External Domino URL (not the internal nucleus-frontend hostname)
+DOMINO_EXTERNAL = "https://<your-domino-domain>"
+GRAFANA_BASE = f"{DOMINO_EXTERNAL}/grafana/api"
+GRAFANA_HEADERS = {"Authorization": "Bearer <grafana-service-account-token>"}
+
+# List dashboards
+resp = requests.get(f"{GRAFANA_BASE}/search?type=dash-db", headers=GRAFANA_HEADERS)
+dashboards = resp.json()
+
+# Query Prometheus via Grafana datasource proxy
+resp = requests.get(
+    f"{GRAFANA_BASE}/datasources/proxy/1/api/v1/query_range",
+    headers=GRAFANA_HEADERS,
+    params={
+        "query": "count by (phase) (kube_pod_status_phase{namespace='domino-compute'})",
+        "start": "1h",
+        "end": "now",
+        "step": "60",
+    }
+)
 ```
 
 ### Key Dashboards
 
 | Dashboard | What It Shows |
 |---|---|
-| **Domino / Views / Workloads** | Active executions by type/tier, pod phases (Pending/Running/Succeeded/Failed), startup time by user |
+| **Domino / Views / Workloads** | Active executions by type/tier, pod phases, startup time by user |
 | **Domino Execution Overview** | Launch rate, success rate, failure reasons, node pool scaling |
-| **Execution Monitoring** (Cloud) | Time to Available, startup phase breakdown (NodeAssigned → ImagesPulled → VolumesMounted → FilesPrepared → Running) |
+| **Execution Monitoring** | Time to Available, startup phase breakdown (NodeAssigned → ImagesPulled → VolumesMounted → FilesPrepared → Running) |
 | **Model Endpoint Monitoring** | HTTP status codes, P50/P90/P95/P99 latency, RPS, CPU/memory/restarts |
 | **Kubernetes / Nodes** | Node-level CPU/memory/disk across cluster |
 | **Cluster Autoscaler** | Scale-up/down events, pending pods, node pool sizes |
-
-### Grafana HTTP API (for programmatic dashboard access)
-
-```python
-import os, requests
-
-DOMINO_HOST = os.environ["DOMINO_HOST"]
-GRAFANA_BASE = f"{DOMINO_HOST}/grafana/api"
-# Use your Domino session cookie or Grafana API key (generate in Grafana UI > Profile > API Keys)
-GRAFANA_HEADERS = {"Authorization": "Bearer <grafana-api-key>"}
-
-# List all dashboards
-resp = requests.get(f"{GRAFANA_BASE}/search?type=dash-db", headers=GRAFANA_HEADERS)
-dashboards = resp.json()
-
-# Get a specific dashboard by UID
-resp = requests.get(f"{GRAFANA_BASE}/dashboards/uid/<uid>", headers=GRAFANA_HEADERS)
-dashboard = resp.json()
-
-# Query Prometheus directly via Grafana's datasource proxy
-resp = requests.get(
-    f"{GRAFANA_BASE}/datasources/proxy/1/api/v1/query",
-    headers=GRAFANA_HEADERS,
-    params={"query": 'sum(rate(http_requests_total[5m])) by (status)'}
-)
-result = resp.json()
-```
-
-### Useful PromQL Queries (via Grafana/Prometheus)
-```promql
-# Active executions by type
-count by (run_type) (domino_execution_status{status="Running"})
-
-# Model endpoint error rate
-sum(rate(http_requests_total{status=~"5.*"}[5m])) by (endpoint)
-
-# P95 latency for model endpoints
-histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))
-
-# Node CPU utilization
-100 - (avg by (node) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
-
-# Memory pressure
-node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100
-```
 
 ---
 
@@ -451,7 +541,7 @@ for tier, times in sorted(queue_times.items()):
 
 | Limitation | Details |
 |---|---|
-| Per-run CPU/memory time series | Not available via REST API. Grafana/Prometheus has this data but requires direct PromQL queries. |
+| Per-run CPU/memory time series | Not in the Domino REST API. Available via New Relic NerdGraph (NRQL on `SystemSample`) using the pod name from the run ID. Requires a New Relic User API key. |
 | `/v4/gateway/runs/getByBatchId` paging direction | Pages oldest-first; to get recent runs you must paginate to the end or use the jobs API with a known `projectId` |
 | Cost APIs | Require SysAdmin role; return empty for non-admin users |
 | Utilization API cache | 30-minute TTL — recent data may be stale |
