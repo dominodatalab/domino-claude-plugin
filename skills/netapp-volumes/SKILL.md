@@ -93,7 +93,15 @@ headers = {
     "Content-Type": "application/json"
 }
 
-# Create a volume (capacity is in bytes)
+# Look up your user ID (username is available in the DOMINO_USER_NAME env var)
+import os
+user_resp = requests.get(
+    f"https://<domino-host>/v4/users?userName={os.environ['DOMINO_USER_NAME']}",
+    headers=headers
+).json()
+user_id = user_resp[0]["id"]
+
+# Create a volume (capacity is in bytes; grants is required)
 response = requests.post(
     "https://<domino-host>/remotefs/v1/volumes",
     headers=headers,
@@ -101,7 +109,10 @@ response = requests.post(
         "name": "large-training-data",
         "description": "Multi-TB training dataset for vision models",
         "filesystemId": "<filesystem-id>",
-        "capacity": 5_000_000_000_000  # 5 TB in bytes
+        "capacity": 5_000_000_000_000,  # 5 TB in bytes
+        "grants": [
+            {"targetId": user_id, "targetRole": "VolumeOwner"}
+        ]
     }
 )
 volume = response.json()
