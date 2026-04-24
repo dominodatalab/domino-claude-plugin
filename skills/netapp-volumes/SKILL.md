@@ -335,6 +335,7 @@ requests.post(
         "projectId": "<project-id>",
         "runCommand": "python train.py",
         "hardwareTierId": "<hardware-tier-id>",
+        "environmentId": "<environment-id>",  # required — use DOMINO_ENVIRONMENT_ID env var
         "netAppVolumeIds": ["<volume-id>"],
         "snapshotNetAppVolumesOnCompletion": True  # auto-snapshot mounted volumes when job finishes
     }
