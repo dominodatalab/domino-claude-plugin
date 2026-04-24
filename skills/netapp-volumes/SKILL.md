@@ -96,18 +96,19 @@ headers = {
     "Content-Type": "application/json"
 }
 
-base_url = os.environ["DOMINO_API_HOST"]  # e.g. http://localhost:8899 inside Domino
+api_url = os.environ["DOMINO_API_HOST"]
+remotefs_url = os.environ["DOMINO_REMOTE_FILE_SYSTEM_HOSTPORT"]
 
 # Look up your user ID (username is available in the DOMINO_USER_NAME env var)
 user_resp = requests.get(
-    f"{base_url}/v4/users?userName={os.environ['DOMINO_USER_NAME']}",
+    f"{api_url}/v4/users?userName={os.environ['DOMINO_USER_NAME']}",
     headers=headers
 ).json()
 user_id = user_resp[0]["id"]
 
 # Create a volume (capacity is in bytes; grants is required)
 response = requests.post(
-    f"{base_url}/remotefs/v1/volumes",
+    f"{remotefs_url}/remotefs/v1/volumes",
     headers=headers,
     json={
         "name": "large-training-data",
@@ -137,7 +138,7 @@ print(f"Created volume ID: {volume['id']}")
 ```python
 # Attach a volume to a project
 requests.post(
-    f"{base_url}/remotefs/v1/rpc/attach-volume-to-project",
+    f"{remotefs_url}/remotefs/v1/rpc/attach-volume-to-project",
     headers=headers,
     json={
         "volumeId": "<volume-id>",
@@ -248,7 +249,7 @@ A snapshot is a read-only, immutable record of the volume's data at a specific p
 ```python
 # Create snapshot with description and one or more tags (tagNames is an array)
 response = requests.post(
-    f"{base_url}/remotefs/v1/snapshots",
+    f"{remotefs_url}/remotefs/v1/snapshots",
     headers=headers,
     json={
         "volumeId": "<volume-id>",
@@ -263,7 +264,7 @@ print(f"Snapshot ID: {snapshot['id']}")
 ### Add a Tag to an Existing Snapshot
 ```python
 requests.post(
-    f"{base_url}/remotefs/v1/snapshots/{snapshot_id}/tags",
+    f"{remotefs_url}/remotefs/v1/snapshots/{snapshot_id}/tags",
     headers=headers,
     json={"name": "production"}
 )
@@ -273,7 +274,7 @@ requests.post(
 ```python
 # Snapshot tied to a specific Domino run for reproducibility
 requests.post(
-    f"{base_url}/remotefs/v1/rpc/create-snapshot-from-run",
+    f"{remotefs_url}/remotefs/v1/rpc/create-snapshot-from-run",
     headers=headers,
     json={
         "volumeId": "<volume-id>",
@@ -287,7 +288,7 @@ requests.post(
 ### Restore a Snapshot
 ```python
 requests.post(
-    f"{base_url}/remotefs/v1/rpc/restore-snapshot",
+    f"{remotefs_url}/remotefs/v1/rpc/restore-snapshot",
     headers=headers,
     json={"snapshotId": "<snapshot-id>"}
 )
@@ -312,7 +313,7 @@ requests.post(
 ```python
 # targetRole values: "VolumeOwner", "VolumeEditor", "VolumeReader"
 requests.put(
-    f"{base_url}/remotefs/v1/volumes/{volume_id}/grants",
+    f"{remotefs_url}/remotefs/v1/volumes/{volume_id}/grants",
     headers=headers,
     json=[
         {"targetId": "<user-id>", "targetRole": "VolumeEditor"},
@@ -328,7 +329,7 @@ requests.put(
 ### Via Domino REST API
 ```python
 requests.post(
-    f"{base_url}/api/jobs/v1/jobs",
+    f"{api_url}/api/jobs/v1/jobs",
     headers=headers,
     json={
         "projectId": "<project-id>",
@@ -346,7 +347,7 @@ requests.post(
 ```python
 # List all volumes accessible to you
 volumes = requests.get(
-    f"{base_url}/remotefs/v1/volumes",
+    f"{remotefs_url}/remotefs/v1/volumes",
     headers=headers
 ).json()
 
@@ -356,7 +357,7 @@ for v in volumes["data"]:
 
 # List snapshots for a volume
 snapshots = requests.get(
-    f"{base_url}/remotefs/v1/snapshots",
+    f"{remotefs_url}/remotefs/v1/snapshots",
     headers=headers,
     params={"volumeId": "<volume-id>"}
 ).json()
@@ -382,7 +383,7 @@ for s in snapshots["data"]:
 ```python
 # Always snapshot before modifying large volumes
 requests.post(
-    f"{base_url}/remotefs/v1/snapshots",
+    f"{remotefs_url}/remotefs/v1/snapshots",
     headers=headers,
     json={
         "volumeId": "<volume-id>",
