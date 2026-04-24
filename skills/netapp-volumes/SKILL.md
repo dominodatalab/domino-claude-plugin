@@ -335,7 +335,7 @@ requests.post(
         "projectId": "<project-id>",
         "commandToRun": "python train.py",
         "hardwareTierId": "<hardware-tier-id>",
-        "externalVolumeMounts": ["<volume-id>"]
+        "netAppVolumeIds": ["<volume-id>"]
     }
 )
 ```
