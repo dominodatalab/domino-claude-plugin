@@ -174,11 +174,11 @@ Mount paths depend on your **project type**. Check which exists in your executio
 There are two ways to access snapshots, with an important behavioral difference:
 
 - **`/snapshots/<volume-name>/<number>/`** — Accessed by snapshot number. When a new snapshot is taken while a workspace is running, the new numbered directory appears **immediately** in that workspace without a restart.
-- **`/snapshot-tags/<volume-name>/<tag-name>/`** — Accessed by tag name. New snapshot-tag directories are **not** visible in a running workspace. You must **restart the workspace** to pick up newly created snapshot tags.
+- **`/snapshot-tags/<volume-name>/<tag-name>/`** — Accessed by tag name. Each snapshot has at most one active tag path — a symlink to its numbered snapshot directory. If you apply multiple tags to the same snapshot, only the most recently applied tag creates a path; earlier tags for that snapshot are not accessible by path. Tag paths for new snapshots are also **not** visible in a running workspace — you must **restart the workspace** for them to appear.
 
 Use the numbered path when you need to access a fresh snapshot from within a live workspace. Use the tagged path for stable, named references in reproducible runs.
 
-> **Important:** Only the most recently added snapshot tag is auto-mounted in executions. If a snapshot has multiple tags, only the newest tag is mounted.
+> **Important:** Each snapshot exposes only one tag path at a time — the most recently applied tag. Older tags on the same snapshot do not have accessible paths.
 
 > **Important:** Renaming a volume changes its mount path. Update any hardcoded paths in your code after renaming.
 
@@ -458,8 +458,8 @@ result = df.groupby("category").mean().compute()
 - For read-only snapshots, use the snapshot tag path instead of the live volume path
 
 ### Snapshot Tag Not Mounted
-- Only the **most recently added** snapshot tag is auto-mounted
-- Access older snapshot tags by their path directly: `/mnt/netapp-volumes/snapshot-tags/<name>/<tag>/`
+- Each snapshot has at most **one** tag path — the most recently applied tag. Earlier tags on the same snapshot are never surfaced as directories and cannot be accessed by path.
+- Tag paths for new snapshots do **not** appear in a running workspace. The numbered snapshot directory (`/snapshots/<name>/<number>/`) appears immediately, but the tag symlink path only becomes visible after restarting the workspace.
 - Verify the tag was created successfully via the UI or API
 
 ### No NetApp Filesystems Available
