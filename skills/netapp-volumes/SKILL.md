@@ -376,11 +376,9 @@ for s in snapshots["data"]:
 ### 1. Use Appropriate Storage
 | Data Type | Storage |
 |-----------|---------|
-| Multi-TB shared datasets | NetApp Volume |
-| Large training data (< 1 TB) | Domino Dataset |
-| Model artifacts | MLflow artifact store or Domino Dataset |
-| Code | Git/Project files |
-| Temporary files | `/tmp/` |
+| Large data of any file type where the entire filesystem should be versioned as a unit, with intentional snapshots | NetApp Volume |
+| Small output files — charts, reports, model binaries | Artifacts / DFS (auto-versioned per file, not suitable for large files) |
+| Code | Git / Project files |
 
 ### 2. Snapshot Before Changes
 ```python
