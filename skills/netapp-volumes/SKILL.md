@@ -335,10 +335,13 @@ requests.post(
         "projectId": "<project-id>",
         "commandToRun": "python train.py",
         "hardwareTierId": "<hardware-tier-id>",
-        "netAppVolumeIds": ["<volume-id>"]
+        "netAppVolumeIds": ["<volume-id>"],
+        "snapshotNetAppVolumesOnCompletion": True  # auto-snapshot mounted volumes when job finishes
     }
 )
 ```
+
+Set `snapshotNetAppVolumesOnCompletion: true` to automatically take a snapshot of all mounted NetApp volumes when the job completes. This is the recommended approach for training jobs — it captures the exact state of the volume at the end of the run without requiring a separate API call.
 
 ---
 
