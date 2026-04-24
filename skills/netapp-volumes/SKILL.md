@@ -333,7 +333,7 @@ requests.post(
     headers=headers,
     json={
         "projectId": "<project-id>",
-        "commandToRun": "python train.py",
+        "runCommand": "python train.py",
         "hardwareTierId": "<hardware-tier-id>",
         "netAppVolumeIds": ["<volume-id>"],
         "snapshotNetAppVolumesOnCompletion": True  # auto-snapshot mounted volumes when job finishes
