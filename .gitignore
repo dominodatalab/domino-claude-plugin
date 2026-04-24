@@ -1,3 +1,5 @@
+.env
+uv.lock
 .Trash*
 
 # Claude Code runtime state (persisted via symlink to /mnt/artifacts/)
