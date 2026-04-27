@@ -118,10 +118,24 @@ Do not add mock/fake data if the API isn't working. Prompt user to set env vars.
 
 Use relative URLs (not absolute) — Domino's nginx proxy modifies the root URL.
 
+**Development workspace (auto-reload on):**
 ```bash
 #!/bin/bash
-uvicorn app:app --host 0.0.0.0 --port 8888
+cd /mnt/code/app
+python app.py          # reload=True by default; uvicorn restarts on .py changes
 ```
+
+**Published Domino App (disable reload):**
+```bash
+#!/bin/bash
+cd /mnt/code/app
+python app.py --no-reload
+```
+
+> **Always remind the user when writing `app.sh`:** the default `app.py` template runs with
+> `reload=True` and `NoCacheStaticMiddleware` — Python changes auto-restart the server, and
+> JS/CSS changes are picked up on a normal browser refresh. Pass `--no-reload` in `app.sh`
+> for published Domino App deployments to avoid file-watcher overhead in production.
 
 ## UX Design Rules
 
