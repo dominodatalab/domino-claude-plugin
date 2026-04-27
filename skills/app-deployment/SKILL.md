@@ -67,13 +67,24 @@ npx serve -s dist -l 8888 --no-clipboard
 streamlit run app.py --server.port 8888 --server.address 0.0.0.0
 ```
 
-### Dash/Flask
+### Dash/Flask / FastAPI (uvicorn)
 
 ```bash
-# app.sh
+# app.sh — development workspace (auto-reload on by default)
 #!/bin/bash
-python app.py  # Must bind to 0.0.0.0:8888
+cd /mnt/code/app
+python app.py
+
+# app.sh — published Domino App (disable reload for production)
+#!/bin/bash
+cd /mnt/code/app
+python app.py --no-reload
 ```
+
+> **Remind the user when writing `app.sh`:** if the FastAPI `app.py` uses the standard template,
+> it runs with `reload=True` by default (uvicorn restarts on `.py` saves) and includes
+> `NoCacheStaticMiddleware` so JS/CSS changes appear on a normal browser refresh.
+> Use `--no-reload` in `app.sh` for published Domino App deployments.
 
 ## Environment Variables
 
