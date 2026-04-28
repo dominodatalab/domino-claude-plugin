@@ -40,74 +40,73 @@ langchain>=0.1.0
 
 ## Framework Auto-Logging
 
-Enable auto-tracing for your LLM framework before making any calls:
-
-### OpenAI
+Enable auto-tracing for your LLM framework before making any calls. **Each framework should be in its own try/except** so one failure doesn't block the others:
 
 ```python
 import mlflow
 
-# Enable OpenAI auto-tracing
-mlflow.openai.autolog()
-
-# Now all OpenAI calls are automatically traced
-from openai import OpenAI
-client = OpenAI()
-
-response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[{"role": "user", "content": "Hello!"}]
-)
+# Each autolog in its own try/except
+try:
+    mlflow.openai.autolog()
+except Exception:
+    pass
+try:
+    mlflow.anthropic.autolog()
+except Exception:
+    pass
+try:
+    mlflow.langchain.autolog()
+except Exception:
+    pass
 ```
 
-### Anthropic
+### Where to Call autolog
+
+**Deployed Apps (FastAPI/Flask):** In the app lifespan, before any requests are handled:
 
 ```python
 import mlflow
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 
-# Enable Anthropic auto-tracing
-mlflow.anthropic.autolog()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Enable autolog — NO mlflow.set_experiment() for deployed apps
+    try:
+        mlflow.openai.autolog()
+    except Exception:
+        pass
+    try:
+        mlflow.anthropic.autolog()
+    except Exception:
+        pass
+    yield
 
-# Now all Anthropic calls are automatically traced
-from anthropic import Anthropic
-client = Anthropic()
-
-response = client.messages.create(
-    model="claude-sonnet-4-20250514",
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
+app = FastAPI(lifespan=lifespan)
 ```
 
-### LangChain
+**Batch scripts / Jobs:** At the top of your script, before any LLM calls:
 
 ```python
 import mlflow
 
-# Enable LangChain auto-tracing
-mlflow.langchain.autolog()
-
-# Now all LangChain operations are traced
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-
-llm = ChatOpenAI(model="gpt-4o-mini")
-prompt = ChatPromptTemplate.from_template("Tell me about {topic}")
-chain = prompt | llm
-
-response = chain.invoke({"topic": "machine learning"})
-```
-
-### Multiple Frameworks
-
-```python
-import mlflow
-
-# Enable auto-tracing for multiple frameworks
 mlflow.openai.autolog()
 mlflow.anthropic.autolog()
-mlflow.langchain.autolog()
 ```
+
+### Important: Do NOT Call mlflow.set_experiment() in Deployed Apps
+
+Domino auto-creates an experiment named `agent_experiment_{app_id}` for each deployed App. The App Performance tab reads traces from this experiment. If you call `mlflow.set_experiment("my-custom-name")`, traces are redirected to your custom experiment and the Performance tab won't see them.
+
+```python
+# BAD — deployed app, overrides auto-routing
+mlflow.set_experiment("my-agent-experiment")  # Performance tab won't see traces
+
+# GOOD — deployed app, let Domino handle routing
+# Just call autolog, nothing else
+```
+
+For development/evaluation scripts, `mlflow.set_experiment()` is fine — traces go to the Experiments UI.
 
 ## Verifying Setup
 
@@ -131,9 +130,8 @@ print("Domino SDK with agents support installed successfully")
 
 ```python
 from domino.agents.tracing import add_tracing
-from domino.agents.logging import DominoRun
 
-@add_tracing(name="test_agent", autolog_frameworks=["openai"])
+@add_tracing(name="test_agent", span_type="AGENT", autolog_frameworks=["openai"])
 def test_agent(query: str) -> str:
     from openai import OpenAI
     client = OpenAI()
@@ -143,13 +141,10 @@ def test_agent(query: str) -> str:
     )
     return response.choices[0].message.content
 
-with DominoRun() as run:
-    result = test_agent("Say hello")
-    print(f"Result: {result}")
-    print(f"Run ID: {run.run_id}")
+# @add_tracing creates the trace — no DominoRun needed
+result = test_agent("Say hello")
+print(f"Result: {result}")
 ```
-
-**Note:** The `autolog_frameworks` parameter in `@add_tracing` enables automatic tracing for the specified frameworks (e.g., `["openai"]`, `["langchain"]`, `["openai", "langchain"]`).
 
 ## Environment Variables
 
@@ -178,14 +173,32 @@ These are automatically available:
 
 ## Project Structure
 
-Recommended structure for GenAI projects:
+### Deployed App (FastAPI)
+
+```
+my-agent-app/
+├── backend/
+│   ├── app/
+│   │   ├── main.py            # FastAPI app, lifespan with autolog (NO set_experiment)
+│   │   ├── agent/
+│   │   │   ├── orchestrator.py # @add_tracing on agent function, mlflow.start_span for tools/LLM
+│   │   │   ├── llm_client.py   # LLM calls wrapped in mlflow.start_span(span_type="LLM")
+│   │   │   └── tools.py        # Tool implementations (no tracing decorators)
+│   │   └── routers/
+│   │       └── agent.py        # Route handler — calls traced function directly, NO DominoRun
+│   └── requirements.txt
+├── frontend/
+└── app.sh                      # Domino App entry point
+```
+
+### Batch Evaluation Script
 
 ```
 my-agent-project/
 ├── agents/
 │   ├── __init__.py
-│   ├── classifier.py      # Classification agent
-│   ├── responder.py       # Response generation agent
+│   ├── classifier.py      # @add_tracing on agent functions
+│   ├── responder.py
 │   └── evaluators.py      # Custom evaluators
 ├── config/
 │   └── config.yaml        # Agent configuration
@@ -194,7 +207,22 @@ my-agent-project/
 └── Dockerfile             # Custom environment
 ```
 
-## Troubleshooting Setup
+## Troubleshooting
+
+### Traces Not Appearing in App Performance Tab
+
+1. **Remove `mlflow.set_experiment()`** — it overrides Domino's auto-routing to `agent_experiment_{app_id}`
+2. **Remove `DominoRun()` wrappers** — they redirect traces to the Experiments UI
+3. **Ensure `@add_tracing` is on the agent function** — this is what creates the trace
+4. **Check that autolog is enabled** — call `mlflow.openai.autolog()` / `mlflow.anthropic.autolog()` in the app lifespan
+5. **Verify MLflow 3.2.0** — older versions don't support GenAI tracing
+
+### Traces Not Appearing in Experiments UI
+
+1. Verify MLflow tracking URI is set (automatic in Domino)
+2. Ensure `DominoRun` context manager is used (required for Experiments UI)
+3. Check experiment name matches expected format
+4. Verify auto-logging is enabled before LLM calls
 
 ### MLflow Version Mismatch
 
@@ -218,13 +246,6 @@ ModuleNotFoundError: No module named 'domino.agents'
 pip install --no-cache-dir "git+https://github.com/dominodatalab/python-domino.git@master#egg=dominodatalab[data,aisystems]"
 ```
 
-### Traces Not Appearing
-
-1. Verify MLflow tracking URI is set (automatic in Domino)
-2. Check experiment name matches expected format
-3. Ensure `DominoRun` context manager is used
-4. Verify auto-logging is enabled before LLM calls
-
 ### API Key Issues
 
 ```
@@ -235,6 +256,6 @@ openai.AuthenticationError: Incorrect API key provided
 
 ## Next Steps
 
-- [ADD-TRACING-DECORATOR.md](./ADD-TRACING-DECORATOR.md) - Learn about @add_tracing
-- [DOMINO-RUN.md](./DOMINO-RUN.md) - Learn about DominoRun context
+- [ADD-TRACING-DECORATOR.md](./ADD-TRACING-DECORATOR.md) - Learn about @add_tracing, span_type, mlflow.start_span
+- [DOMINO-RUN.md](./DOMINO-RUN.md) - Learn about DominoRun context (development/evaluation only)
 - [MULTI-AGENT-EXAMPLE.md](./MULTI-AGENT-EXAMPLE.md) - See complete example
