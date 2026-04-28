@@ -2,6 +2,17 @@
 
 The `@add_tracing` decorator is the core mechanism for capturing traces in Domino GenAI applications.
 
+**Important:** `@add_tracing` creates traces independently — it does NOT require a `DominoRun` wrapper. In deployed Domino Apps, calling `@add_tracing`-decorated functions without `DominoRun` routes traces to the App Performance tab. Wrapping in `DominoRun` redirects them to the Experiments UI instead.
+
+## Decorator Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `name` | Yes | Trace name shown in the UI |
+| `span_type` | No | Span classification for the trace tree. Values: `"AGENT"`, `"TOOL"`, `"LLM"`, `"CHAIN"`. Use `"AGENT"` for the top-level agent function. |
+| `autolog_frameworks` | No | List of LLM frameworks to auto-trace within this function's scope: `["openai"]`, `["anthropic"]`, `["openai", "anthropic"]` |
+| `evaluator` | No | Function to score the output (see [EVALUATORS.md](./EVALUATORS.md)) |
+
 ## Basic Usage
 
 ### Simple Tracing
@@ -21,6 +32,23 @@ def my_agent_function(query: str) -> str:
     """
     response = llm.invoke(query)
     return response
+```
+
+### With span_type and autolog_frameworks
+
+```python
+@add_tracing(
+    name="agent_turn",
+    span_type="AGENT",
+    autolog_frameworks=["openai", "anthropic"],
+)
+async def run_agent_turn(messages: list[dict]) -> dict:
+    """
+    span_type="AGENT" classifies this as the top-level agent span in the trace tree.
+    autolog_frameworks captures all OpenAI and Anthropic SDK calls as child spans.
+    """
+    response = await create_message(model="gpt-4o", messages=messages)
+    return {"content": response}
 ```
 
 ### With LLM Framework
@@ -45,29 +73,160 @@ def chat_agent(user_message: str) -> str:
     return response.choices[0].message.content
 ```
 
-## Decorator Parameters
+## Manual Spans with mlflow.start_span()
 
-### name (required)
+For dynamic operations like tool-use agent loops where the function name isn't known at decoration time, use `mlflow.start_span()` to create child spans inside an `@add_tracing`-decorated function.
 
-The trace name shown in the UI:
+### Tool Call Spans
 
 ```python
-@add_tracing(name="incident_classifier")
-def classify_incident(incident: dict) -> dict:
-    pass
+import mlflow
+
+async def execute_tool(tool_name: str, tool_input: dict) -> str:
+    """Execute a tool call wrapped in an MLflow child span."""
+    with mlflow.start_span(name=f"tool:{tool_name}", span_type="TOOL") as span:
+        span.set_inputs({"tool": tool_name, "input": tool_input})
+        try:
+            result = await dispatch_tool(tool_name, tool_input)
+            span.set_outputs({"result": result[:500]})
+            return result
+        except Exception as e:
+            span.set_outputs({"error": str(e)})
+            raise
 ```
 
-### evaluator (optional)
-
-Function to evaluate the output:
+### LLM Call Spans
 
 ```python
-def my_evaluator(inputs, output):
-    return {"quality_score": calculate_score(output)}
+import mlflow
 
-@add_tracing(name="my_agent", evaluator=my_evaluator)
-def my_agent(query: str) -> str:
-    pass
+async def call_llm(model: str, messages: list, max_tokens: int) -> dict:
+    """Wrap each LLM SDK call in a span for explicit token/latency capture."""
+    with mlflow.start_span(name="llm_call", span_type="LLM") as span:
+        span.set_inputs({"model": model, "path": "gateway", "max_tokens": max_tokens})
+        response = await client.chat.completions.create(
+            model=model, messages=messages, max_tokens=max_tokens,
+        )
+        usage = response.usage
+        span.set_outputs({
+            "finish_reason": response.choices[0].finish_reason,
+            "input_tokens": usage.prompt_tokens if usage else 0,
+            "output_tokens": usage.completion_tokens if usage else 0,
+        })
+    return response
+```
+
+### Complete Tool-Use Agent Pattern
+
+This is the most common agentic pattern — an `@add_tracing`-decorated agent function with `mlflow.start_span` for tool and LLM calls:
+
+```python
+import mlflow
+from domino.agents.tracing import add_tracing
+
+@add_tracing(
+    name="agent_turn",
+    span_type="AGENT",
+    autolog_frameworks=["openai", "anthropic"],
+)
+async def run_agent(messages: list[dict], context: str) -> dict:
+    """Full agent loop with nested LLM and TOOL spans."""
+    try:
+        mlflow.update_current_trace(
+            tags={"session_id": "abc", "actor": "agent"}
+        )
+    except Exception:
+        pass
+
+    working_messages = [m.copy() for m in messages]
+    tool_calls_made = []
+    total_input_tokens = 0
+    total_output_tokens = 0
+
+    for iteration in range(8):
+        # LLM call with explicit span
+        with mlflow.start_span(name="llm_call", span_type="LLM") as span:
+            span.set_inputs({"model": "gpt-4o", "iteration": iteration})
+            response = await client.chat.completions.create(
+                model="gpt-4o", messages=working_messages, tools=TOOLS,
+            )
+            span.set_outputs({
+                "finish_reason": response.choices[0].finish_reason,
+                "input_tokens": response.usage.prompt_tokens,
+                "output_tokens": response.usage.completion_tokens,
+            })
+        total_input_tokens += response.usage.prompt_tokens
+        total_output_tokens += response.usage.completion_tokens
+
+        if response.choices[0].finish_reason != "tool_calls":
+            # Final response — annotate the outer AGENT span
+            _annotate_active_span({
+                "tool_calls": len(tool_calls_made),
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens,
+            })
+            return {"content": response.choices[0].message.content, "tool_calls_made": tool_calls_made}
+
+        # Execute tool calls with TOOL spans
+        for tc in response.choices[0].message.tool_calls:
+            with mlflow.start_span(name=f"tool:{tc.function.name}", span_type="TOOL") as span:
+                span.set_inputs({"tool": tc.function.name, "input": tc.function.arguments})
+                result = await dispatch_tool(tc.function.name, tc.function.arguments)
+                span.set_outputs({"result": result[:500]})
+                tool_calls_made.append({"name": tc.function.name, "output": result})
+
+        # Continue conversation with tool results
+        working_messages.append({"role": "assistant", "content": None, "tool_calls": response.choices[0].message.tool_calls})
+        for tc, result in zip(response.choices[0].message.tool_calls, [t["output"] for t in tool_calls_made[-len(response.choices[0].message.tool_calls):]]):
+            working_messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+    return {"content": "Max iterations reached.", "tool_calls_made": tool_calls_made}
+
+
+def _annotate_active_span(attrs: dict) -> None:
+    """Safely set attributes on the current MLflow span."""
+    try:
+        span = mlflow.get_current_active_span()
+        if span is not None:
+            for k, v in attrs.items():
+                span.set_attribute(k, v)
+    except Exception:
+        pass
+```
+
+The resulting trace tree in the UI:
+
+```
+agent_turn (AGENT)
+├── llm_call (LLM) — first model call
+├── tool:get_data (TOOL) — tool execution
+├── tool:analyze (TOOL) — tool execution
+├── llm_call (LLM) — second model call with tool results
+```
+
+## Span Annotation APIs
+
+Attach metadata to traces and spans for filtering and debugging.
+
+### Trace-Level Tags
+
+```python
+# Tag the entire trace (visible in trace list, used for filtering)
+mlflow.update_current_trace(
+    tags={"session_id": "abc123", "actor": "agent", "installation": "NS_NORFOLK"}
+)
+```
+
+### Span-Level Attributes
+
+```python
+# Annotate the current span with metrics
+span = mlflow.get_current_active_span()
+if span is not None:
+    span.set_attribute("tool_calls", 5)
+    span.set_attribute("total_input_tokens", 12000)
+    span.set_attribute("total_output_tokens", 850)
+    span.set_attribute("model", "gpt-4o")
 ```
 
 ## What Gets Captured
@@ -98,35 +257,6 @@ def generate_response(query: str) -> dict:
     }
 
 # Trace captures the entire return dict
-```
-
-### Nested LLM Calls
-
-With auto-logging enabled, all LLM calls within the function are captured as child spans:
-
-```python
-import mlflow
-from domino.agents.tracing import add_tracing
-from openai import OpenAI
-
-mlflow.openai.autolog()
-client = OpenAI()
-
-@add_tracing(name="multi_step_agent")
-def multi_step_agent(query: str) -> str:
-    # First LLM call - captured as child span
-    classification = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Classify: {query}"}]
-    )
-
-    # Second LLM call - captured as child span
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Respond to: {query}"}]
-    )
-
-    return response.choices[0].message.content
 ```
 
 ### Errors and Exceptions
@@ -179,66 +309,6 @@ pipeline
     └── [OpenAI call]
 ```
 
-## With Evaluators
-
-### Basic Evaluator
-
-```python
-def quality_evaluator(inputs, output):
-    """
-    Evaluator function signature:
-    - inputs: dict of argument names to values
-    - output: return value of the decorated function
-
-    Returns: dict of metric names to values
-    """
-    score = len(output) / 100  # Simple length-based score
-    return {"quality_score": min(score, 1.0)}
-
-@add_tracing(name="my_agent", evaluator=quality_evaluator)
-def my_agent(query: str) -> str:
-    return llm.invoke(query)
-```
-
-### LLM-as-Judge Evaluator
-
-```python
-def llm_judge_evaluator(inputs, output):
-    """Use a separate LLM to evaluate quality."""
-    judge_response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{
-            "role": "user",
-            "content": f"""Rate this response 0-10:
-            Question: {inputs['query']}
-            Response: {output}
-            Score (just the number):"""
-        }]
-    )
-    score = float(judge_response.choices[0].message.content.strip()) / 10
-    return {"judge_score": score}
-
-@add_tracing(name="evaluated_agent", evaluator=llm_judge_evaluator)
-def evaluated_agent(query: str) -> str:
-    return llm.invoke(query)
-```
-
-### Multi-Metric Evaluator
-
-```python
-def comprehensive_evaluator(inputs, output):
-    return {
-        "relevance": assess_relevance(inputs["query"], output),
-        "completeness": assess_completeness(output),
-        "factuality": assess_factuality(output),
-        "safety": assess_safety(output),
-    }
-
-@add_tracing(name="comprehensive_agent", evaluator=comprehensive_evaluator)
-def comprehensive_agent(query: str) -> str:
-    return llm.invoke(query)
-```
-
 ## Async Functions
 
 Tracing works with async functions:
@@ -247,7 +317,7 @@ Tracing works with async functions:
 import asyncio
 from domino.agents.tracing import add_tracing
 
-@add_tracing(name="async_agent")
+@add_tracing(name="async_agent", span_type="AGENT", autolog_frameworks=["openai"])
 async def async_agent(query: str) -> str:
     response = await async_llm.invoke(query)
     return response
@@ -257,47 +327,65 @@ async def main():
     result = await async_agent("Hello")
 ```
 
-## Class Methods
+## Graceful Fallback (SDK Not Installed)
 
-Tracing works with class methods:
+Always guard the import so your code works in environments without the Domino SDK:
 
 ```python
-class MyAgent:
-    def __init__(self, model: str):
-        self.model = model
-        self.client = OpenAI()
-
-    @add_tracing(name="agent_process")
-    def process(self, query: str) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": query}]
-        )
-        return response.choices[0].message.content
-
-# Usage
-agent = MyAgent("gpt-4o-mini")
-result = agent.process("Hello")
+try:
+    from domino.agents.tracing import add_tracing
+    _HAS_DOMINO_SDK = True
+except ImportError:
+    _HAS_DOMINO_SDK = False
+    def add_tracing(*_a, **_kw):
+        def deco(fn):
+            return fn
+        return deco
 ```
 
 ## Best Practices
 
-### 1. Use Descriptive Names
+### 1. Use `@add_tracing` Only on Agent Entry Points
+
+Put `@add_tracing` on the top-level agent orchestration function, not on every utility function. Use `mlflow.start_span()` for child operations.
+
+```python
+# Good: @add_tracing on the agent, mlflow.start_span for tools/LLM calls
+@add_tracing(name="agent_turn", span_type="AGENT")
+async def run_agent(messages):
+    with mlflow.start_span(name="llm_call", span_type="LLM"):
+        ...
+    with mlflow.start_span(name="tool:search", span_type="TOOL"):
+        ...
+
+# Bad: @add_tracing on every function
+@add_tracing(name="search_tool")  # Don't do this
+def search(query):
+    ...
+```
+
+### 2. Use Descriptive Names
 
 ```python
 # Good
-@add_tracing(name="incident_classification_agent")
-@add_tracing(name="customer_response_generator")
+@add_tracing(name="incident_classification_agent", span_type="AGENT")
+@add_tracing(name="customer_response_generator", span_type="AGENT")
 
 # Bad
 @add_tracing(name="agent1")
 @add_tracing(name="process")
 ```
 
-### 2. Return Structured Data
+### 3. Always Set span_type for Agent Functions
 
 ```python
-@add_tracing(name="classifier")
+@add_tracing(name="my_agent", span_type="AGENT", autolog_frameworks=["openai"])
+```
+
+### 4. Return Structured Data
+
+```python
+@add_tracing(name="classifier", span_type="AGENT")
 def classify(text: str) -> dict:
     # Return dict for better trace visibility
     return {
@@ -307,35 +395,8 @@ def classify(text: str) -> dict:
     }
 ```
 
-### 3. Include Context in Evaluators
-
-```python
-def contextual_evaluator(inputs, output):
-    # Access all inputs for context
-    query = inputs.get("query", "")
-    context = inputs.get("context", "")
-
-    return {
-        "relevance_to_query": assess_relevance(query, output),
-        "used_context": context in output,
-    }
-```
-
-### 4. Handle Errors Gracefully
-
-```python
-@add_tracing(name="safe_agent")
-def safe_agent(query: str) -> dict:
-    try:
-        result = llm.invoke(query)
-        return {"success": True, "result": result}
-    except Exception as e:
-        # Error is captured in trace
-        return {"success": False, "error": str(e)}
-```
-
 ## Next Steps
 
-- [DOMINO-RUN.md](./DOMINO-RUN.md) - Group traces with DominoRun
+- [DOMINO-RUN.md](./DOMINO-RUN.md) - Group traces with DominoRun (development/evaluation only)
 - [EVALUATORS.md](./EVALUATORS.md) - Advanced evaluator patterns
 - [MULTI-AGENT-EXAMPLE.md](./MULTI-AGENT-EXAMPLE.md) - Complete example

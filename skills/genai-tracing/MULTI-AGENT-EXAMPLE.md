@@ -1,8 +1,216 @@
-# Multi-Agent Tracing Example
+# Multi-Agent Tracing Examples
 
-This is a complete, production-ready example of a multi-agent system with full tracing, based on the Domino GenAI Tracing Blueprint.
+Two complete examples:
+1. **[Deployed App Example](#deployed-app-example)** — FastAPI tool-use agent with traces in the App Performance tab
+2. **[Batch Evaluation Example](#batch-evaluation-example)** — Pipeline of agents with DominoRun, traces in Experiments UI
 
-## Incident Triage System Overview
+---
+
+## Deployed App Example
+
+A FastAPI-based tool-use agent deployed as a Domino App. Traces appear in the **App Performance tab**.
+
+### Architecture
+
+```
+backend/
+├── main.py              # FastAPI app, lifespan with autolog
+├── agent/
+│   ├── orchestrator.py  # @add_tracing on agent function
+│   ├── llm_client.py    # LLM calls with mlflow.start_span(span_type="LLM")
+│   └── tools.py         # Tool implementations (plain functions, no decorators)
+├── routers/
+│   └── agent.py         # Route handler — NO DominoRun
+└── app.sh
+```
+
+### main.py
+
+```python
+import mlflow
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # autolog only — NO mlflow.set_experiment() for deployed apps
+    try:
+        mlflow.openai.autolog()
+    except Exception:
+        pass
+    try:
+        mlflow.anthropic.autolog()
+    except Exception:
+        pass
+    yield
+
+app = FastAPI(lifespan=lifespan)
+```
+
+### agent/orchestrator.py
+
+```python
+import mlflow
+from contextlib import contextmanager
+
+try:
+    from domino.agents.tracing import add_tracing
+    from domino.agents.logging import DominoRun as _DominoRun
+    _HAS_DOMINO_SDK = True
+except ImportError:
+    _HAS_DOMINO_SDK = False
+    _DominoRun = None
+    def add_tracing(*_a, **_kw):
+        def deco(fn):
+            return fn
+        return deco
+
+
+def _annotate_active_span(attrs: dict) -> None:
+    """Safely set attributes on the current MLflow span."""
+    try:
+        span = mlflow.get_current_active_span()
+        if span is not None:
+            for k, v in attrs.items():
+                span.set_attribute(k, v)
+    except Exception:
+        pass
+
+
+async def _execute_tool_with_span(tool_name: str, tool_input: dict) -> str:
+    """Execute a tool call wrapped in an MLflow TOOL span."""
+    with mlflow.start_span(name=f"tool:{tool_name}", span_type="TOOL") as span:
+        span.set_inputs({"tool": tool_name, "input": tool_input})
+        try:
+            result = await dispatch_tool(tool_name, tool_input)
+            result_str = json.dumps(result, default=str)
+            span.set_outputs({"result": result_str[:500]})
+            return result_str
+        except Exception as e:
+            span.set_outputs({"error": str(e)})
+            return json.dumps({"error": str(e)})
+
+
+@add_tracing(
+    name="agent_turn",
+    span_type="AGENT",
+    autolog_frameworks=["openai", "anthropic"],
+)
+async def run_agent(messages: list[dict], context: str = "") -> dict:
+    """Core agent loop. @add_tracing creates the outer AGENT span."""
+    try:
+        mlflow.update_current_trace(
+            tags={"context": context, "actor": "agent"}
+        )
+    except Exception:
+        pass
+
+    working_messages = [m.copy() for m in messages]
+    tool_calls_made = []
+    total_input_tokens = 0
+    total_output_tokens = 0
+
+    for iteration in range(8):
+        response = await create_message(
+            model=MODEL, max_tokens=4096,
+            system=SYSTEM_PROMPT, messages=working_messages, tools=TOOLS,
+        )
+        total_input_tokens += response.usage.get("input_tokens", 0)
+        total_output_tokens += response.usage.get("output_tokens", 0)
+
+        # Check for end of turn
+        if response.stop_reason != "tool_use":
+            text = "".join(b.text for b in response.content if hasattr(b, "text"))
+            _annotate_active_span({
+                "tool_calls": len(tool_calls_made),
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens,
+                "model": MODEL,
+            })
+            return {"content": text, "tool_calls_made": tool_calls_made}
+
+        # Execute tool calls
+        for block in response.content:
+            if block.type == "tool_use":
+                result = await _execute_tool_with_span(block.name, block.input)
+                tool_calls_made.append({"name": block.name, "input": block.input})
+                working_messages.append(...)  # Add tool result to conversation
+
+    return {"content": "Max iterations reached.", "tool_calls_made": tool_calls_made}
+```
+
+### agent/llm_client.py
+
+```python
+import mlflow
+
+async def _call_gateway(model, max_tokens, system, messages, tools) -> LLMResponse:
+    """LLM call with explicit LLM span for token tracking."""
+    # ... build kwargs ...
+
+    with mlflow.start_span(name="llm_call", span_type="LLM") as span:
+        span.set_inputs({"model": model, "path": "gateway", "max_tokens": max_tokens})
+        response = await client.chat.completions.create(**kwargs)
+        usage = response.usage
+        span.set_outputs({
+            "finish_reason": response.choices[0].finish_reason,
+            "input_tokens": usage.prompt_tokens if usage else 0,
+            "output_tokens": usage.completion_tokens if usage else 0,
+        })
+
+    return normalize_response(response)
+
+
+async def _call_anthropic(model, max_tokens, system, messages, tools) -> LLMResponse:
+    """Fallback LLM call with explicit LLM span."""
+    # ... build kwargs ...
+
+    with mlflow.start_span(name="llm_call", span_type="LLM") as span:
+        span.set_inputs({"model": model, "path": "anthropic", "max_tokens": max_tokens})
+        response = await client.messages.create(**kwargs)
+        span.set_outputs({
+            "stop_reason": response.stop_reason,
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+        })
+
+    return normalize_response(response)
+```
+
+### routers/agent.py
+
+```python
+from fastapi import APIRouter
+from agent.orchestrator import run_agent
+
+router = APIRouter()
+
+@router.post("/chat")
+async def chat(request: ChatRequest):
+    """NO DominoRun — @add_tracing on run_agent handles tracing.
+    Domino auto-routes traces to agent_experiment_{app_id}."""
+    return await run_agent(request.messages, request.context)
+```
+
+### Trace Tree in App Performance Tab
+
+```
+agent_turn (AGENT)
+├── llm_call (LLM) — first model call
+│   └── AsyncCompletions (autolog)
+├── tool:query_data (TOOL)
+├── tool:analyze (TOOL)
+├── llm_call (LLM) — second call with tool results
+│   └── AsyncCompletions (autolog)
+```
+
+---
+
+## Batch Evaluation Example
+
+This is a complete, production-ready example of a multi-agent pipeline with full tracing, based on the Domino GenAI Tracing Blueprint. Traces appear in the **Experiments UI**.
+
+### Incident Triage System Overview
 
 This example implements an incident triage system with four specialized agents:
 
