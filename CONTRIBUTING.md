@@ -102,8 +102,13 @@ rules lives in [SKILL_AUDIT.md](./SKILL_AUDIT.md).
 
 ### 1. Authenticate with the local token endpoint, not API keys
 
+**NEVER use `DOMINO_USER_API_KEY`, not even as a fallback.** It is not a
+secure pattern. The API keys are deprecated and will be removed in a future
+Domino release. The local access-token endpoint is Domino's forward-looking
+auth architecture for in-cluster execution.
+
 Skills running inside Domino (workspace, job, app, model) should fetch a
-short-lived bearer token from the local sidecar instead of using API keys.
+short-lived bearer token from the local sidecar.
 
 Do:
 
@@ -112,18 +117,18 @@ TOKEN=$(curl -s http://localhost:8899/access-token)
 curl -H "Authorization: Bearer $TOKEN" "$DOMINO_API_HOST/api/..."
 ```
 
-Don't:
+Don't (deprecated, will be removed):
 
 ```bash
 curl -H "X-Domino-Api-Key: $DOMINO_USER_API_KEY" "$DOMINO_API_HOST/api/..."
 ```
 
-Why: API-key headers leak into shell history and process listings, are
-long-lived, and tie the request to the user rather than the running execution.
-The local token endpoint issues short-lived tokens scoped to the current
-workspace/job. (PR #8: *"we should remove all the stuff here about using
-X-Domino-Api-Key. We should have these examples fetch tokens from
-localhost:8899/access-token"*.)
+Why: tokens fetched from the local endpoint are short-lived and scoped to
+the current workspace/job. API keys are long-lived, leak into shell history
+and process listings, tie requests to the user rather than the execution,
+and are slated for removal. (PR #8: *"we should remove all the stuff here
+about using X-Domino-Api-Key. We should have these examples fetch tokens
+from localhost:8899/access-token"*.)
 
 ### 2. Use Domino-injected environment variables for hosts
 
