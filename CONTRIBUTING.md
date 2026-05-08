@@ -58,7 +58,7 @@ Detailed description of the skill...
 4. Keep SKILL.md under 500 lines; use supporting files for details
 5. Follow the [Skill Authoring Standards](#skill-authoring-standards) — auth
    pattern, host env vars, no `python-domino` SDK, verified endpoints,
-   smoke-tested payloads, correct storage-tier recommendations
+   smoke-tested payloads
 
 ### Adding a New Command
 
@@ -171,18 +171,7 @@ Run each documented payload at least once against a live Domino instance and
 confirm a 2xx before merging. Note your test result (status code, any
 clean-up steps) in the PR description.
 
-### 6. Recommend the right storage tier for the use case
-
-| Use case | Recommended tier |
-|----------|------------------|
-| Trained / registered model artifacts | MLflow Model Registry, Domino Model Registry |
-| Large shared / versioned data | Domino Datasets, NetApp volumes |
-| Small intermediate outputs from a single job | `/mnt/artifacts/` |
-
-Don't blanket-recommend `/mnt/artifacts/` as the home for production model
-artifacts.
-
-### 7. `.gitignore` edits are additive
+### 6. `.gitignore` edits are additive
 
 If a PR removes lines from `.gitignore`, justify it in the PR description.
 Accidental removals of existing rules will be flagged in review.
