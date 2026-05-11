@@ -10,6 +10,7 @@ This plugin enables Claude Code to help you with all aspects of Domino Data Lab,
 - **Jobs**: Batch execution, scheduled jobs, and monitoring
 - **Environments**: Custom Docker environments and package management
 - **Datasets**: Data versioning with snapshots and sharing
+- **NetApp Volumes**: Enterprise-grade multi-terabyte storage with near-instant snapshots
 - **Apps**: Deploy React, Streamlit, and Dash applications
 - **Models**: Deploy, monitor, and manage model endpoints
 - **GenAI**: Trace and evaluate AI agents with the Domino SDK
@@ -205,7 +206,7 @@ The plugin includes a vendored copy of the [Domino MCP Server](https://github.co
 
 Requires `uv` to be installed (see [Prerequisites](#prerequisites)).
 
-### Skills (18 Total)
+### Skills (20 Total)
 
 | Skill | Description |
 | --- | --- |
@@ -228,6 +229,7 @@ Requires `uv` to be installed (see [Prerequisites](#prerequisites)).
 | `domino-python-sdk` | Python SDK (python-domino) and REST API |
 | `domino-data-sdk` | Data SDK (domino-data) for data sources, datasets, training sets |
 | `domino-ui-design` | Knowledge on Domino UI styling for integrated App design |
+| `netapp-volumes` | Enterprise-grade multi-terabyte NetApp ONTAP storage with near-instant snapshots and versioning |
 
 ### Slash Commands
 
@@ -291,7 +293,8 @@ domino-claude-plugin/
 │   ├── modeling-assistant/
 │   ├── data-connectivity/
 │   ├── python-sdk/
-│   └── domino-data-sdk/
+│   ├── domino-data-sdk/
+│   └── netapp-volumes/
 ├── commands/                # Slash commands
 ├── hooks/                   # Example automation hooks
 ├── templates/               # Code templates

@@ -4,7 +4,7 @@
       "command": "uv",
       "args": [
         "--directory",
-        "${CLAUDE_PLUGIN_ROOT}/mcp-servers/domino_mcp_server",
+        "$/mnt/code/.claude/mcp-servers/domino_mcp_server",
         "run",
         "domino_mcp_server.py"
       ],
