@@ -48,19 +48,32 @@ curl -s -X POST -H "$H" -H "Content-Type: application/json" \
 
 ## Validate before import
 
-Always dry-run before applying. Validation runs the parse and conflict
-checks without mutating state.
+Always dry-run before applying. Validation parses the CSV and runs
+structural / length / depth checks without mutating state.
 
 ```bash
 curl -s -X POST -H "$H" \
   -F "file=@taxonomy-import.csv" \
   "$BASE/rpc/validate-file"
 # 200 → {"valid":true}
-# or 4xx with details on the first error
+# 400 → {"message":"..."}                — file-level error (empty file, no `file` field)
+# 422 → {"errors":[{"line":N,"message":"..."}]}  — per-row errors (all returned, not just first)
 ```
 
 The endpoint expects **multipart form data**, not JSON. The form field name
 is `file`. `-F "file=@<path>"` is the simplest way to send it from curl.
+
+What the validator actually checks (verified 2026-05-11):
+
+- ✅ File is non-empty and parseable as CSV
+- ✅ Every row has exactly 4 columns
+- ✅ Each tag-path segment ≤ `maxLabelLength` from `GET /config` (128 chars)
+- ✅ Tag path depth ≤ `maxDepth` from `GET /config` (5 levels)
+- ❌ **Does NOT check that the header row matches the expected column names.**
+  A CSV whose first row is unrelated text passes with `{"valid":true}` and
+  then imports the header as a real namespace called `namespace_label`. If
+  you're building the CSV programmatically, double-check the header
+  yourself before uploading.
 
 ## Import
 

@@ -126,12 +126,17 @@ Tag depth is capped at `maxDepth` from `GET /config` (5 on most deployments).
 # Single tag
 curl -s -H "$H" "$BASE/tags/<tag-id>/entities" | python3 -m json.tool
 
-# Multiple tags (intersection)
-curl -s -H "$H" "$BASE/entities?tagIds=<tag-id-1>,<tag-id-2>&entityType=project"
+# Multiple tags (intersection) — tagIds is a REPEATED query parameter, not comma-separated
+curl -s -H "$H" "$BASE/entities?tagIds=<tag-id-1>&tagIds=<tag-id-2>&entityType=project"
 ```
 
 Both endpoints return paginated results with `meta.pagination.{total,limit,offset}`.
 Paginate with `?limit=50&offset=50`.
+
+> **Heads-up:** `tagIds` on `/entities` must be repeated per value
+> (`?tagIds=A&tagIds=B`). Comma-separating returns
+> `400 {"message":"invalid tag ID: A,B"}`. By contrast, `entityIds` on
+> `/entity-tags` *is* comma-separated. Yes, the convention is inconsistent.
 
 ### Workflow 4 — Autocomplete in a tagging UI (discovery)
 
@@ -172,7 +177,9 @@ curl -s -X PUT -H "$H" -H "Content-Type: application/json" \
   -d '{"label":"Indication","description":"updated","status":"active","allowMultipleAssignments":true}' \
   "$BASE/namespaces/<id>"
 
-# Delete (only if empty — namespaces with tags cannot be deleted directly)
+# Delete — cascades through the namespace's tags and entity-tag bindings.
+# Returns 204 even on a non-empty namespace. There is no "are you sure" prompt.
+# Reach for `namespaces/bulk-delete` when removing several at once.
 curl -s -X DELETE -H "$H" "$BASE/namespaces/<id>"
 # 204 No Content
 ```
@@ -209,6 +216,12 @@ curl -s -X POST -H "$H" -H "Content-Type: application/json" \
   -d '{"entityType":"project","entityId":"<project-id>","tagIds":["<tag-1>","<tag-2>"]}' \
   "$BASE/rpc/tag-entity"
 # 201 → {"entityId":"...","entityType":"project","entityName":"...","tags":[...]}
+#
+# Constraint: if `tagIds` contains more than one tag from the SAME namespace,
+# that namespace must have `allowMultipleAssignments=true`. Otherwise:
+# 400 → {"message":"namespace does not allow multiple tag assignments per entity"}
+# To replace a tag in a single-assign namespace, send a separate request — the
+# new tag overwrites the prior one for that namespace.
 
 # Remove specific tags from an entity
 curl -s -X POST -H "$H" -H "Content-Type: application/json" \
@@ -293,7 +306,8 @@ taxonomy across Domino environments.
   IDs are stable. Workflows that automate tagging should reference tag IDs.
 - **Discoverability**: use `GET /taxonomy` for full-tree views,
   `GET /tags/autocomplete?q=...` for typeaheads, and
-  `GET /entities?tagIds=...&entityType=...` for filtered lists.
+  `GET /entities?tagIds=A&tagIds=B&entityType=...` (one `tagIds` per value,
+  not comma-separated) for filtered lists.
 
 ## Troubleshooting
 
@@ -322,11 +336,13 @@ Casing matters — `Project` and `PROJECT` will be rejected.
 non-empty and ≤ `maxLabelLength` (from `/config`). If you intend to nest the
 tag, `parentId` must reference a tag in the same namespace.
 
-### Cannot delete a namespace
+### Deleting a namespace removes its tags too
 
-`DELETE /namespaces/{id}` requires the namespace to be empty. Either delete
-its tags first (single or via `tags/bulk-delete`) or use
-`namespaces/bulk-delete` which handles cascades.
+`DELETE /namespaces/{id}` is a cascading delete: it removes the namespace,
+every tag inside it, and every entity-tag binding pointing at those tags.
+There is no "namespace must be empty" check — confirm with the user before
+calling it against a shared cluster. `namespaces/bulk-delete` has the same
+cascade behavior across multiple IDs.
 
 ## Documentation Reference
 
