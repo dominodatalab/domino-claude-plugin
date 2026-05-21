@@ -135,3 +135,35 @@ Key rules to always follow:
 ## UX Review
 
 When reviewing a Domino app UI, read [references/ux-design-rules.md](references/ux-design-rules.md) and check against the review checklists. Classify issues as High/Medium/Low severity.
+
+## Documentation Reference
+
+Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+
+This skill uses two swagger docs:
+
+**Public API** (covers `/v4/` platform endpoints, no auth required):
+```bash
+curl "$DOMINO_API_HOST/assets/public-api.json"
+# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
+```
+
+**Governance API** (covers `/api/governance/v1/` endpoints, requires bearer token):
+```bash
+TOKEN=$(curl -s http://localhost:8899/access-token)
+# Governance is not routed through $DOMINO_API_HOST. Derive the external cluster URL
+# from the JWT iss claim — works in any workspace type.
+CLUSTER_URL=$(echo $TOKEN | cut -d'.' -f2 | python3 -c "
+import sys, base64, json, re
+p = sys.stdin.read().strip()
+p += '=' * (-len(p) % 4)
+print(re.sub(r'/auth/realms/.*', '', json.loads(base64.b64decode(p))['iss']))
+")
+curl -H "Authorization: Bearer $TOKEN" "$CLUSTER_URL/api/governance/swagger/doc.json"
+# Browser UI (must be logged in): $CLUSTER_URL/api/governance/swagger/index.html
+```
+
+**Public docs (workflow context and field explanations):**
+- [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)

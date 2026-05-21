@@ -157,11 +157,37 @@ into their examples.
 
 ### 4. Verify endpoints against live API docs before writing examples
 
-Don't guess endpoints from memory. Check
-[docs.dominodatalab.com](https://docs.dominodatalab.com/) → API Guide for the
-current path. PR #8 caught a wrong jobs endpoint
-(`/api/jobs/v1/runs` → `/api/jobs/v1/jobs`) that had been carried forward from
-an older version.
+Don't guess endpoints from memory. Use a two-tier approach:
+
+**Check swagger first** for current endpoint paths and field names — the
+cluster swagger always reflects the installed version. Get the cluster URL from
+`$DOMINO_API_HOST`. Most endpoints are in the public API spec (no auth
+needed); governance, taxonomy, and netapp-volumes swagger docs require a
+bearer token from `localhost:8899/access-token`:
+
+```bash
+# Public API (no auth):
+curl "$DOMINO_API_HOST/assets/public-api.json"
+
+# Auth-required swagger (governance / netapp-volumes):
+# These services are NOT routed through $DOMINO_API_HOST (internal Kubernetes URL).
+# Derive the external cluster URL from the JWT iss claim — works in any workspace type.
+TOKEN=$(curl -s http://localhost:8899/access-token)
+CLUSTER_URL=$(echo $TOKEN | cut -d'.' -f2 | python3 -c "
+import sys, base64, json, re
+p = sys.stdin.read().strip()
+p += '=' * (-len(p) % 4)
+print(re.sub(r'/auth/realms/.*', '', json.loads(base64.b64decode(p))['iss']))
+")
+curl -H "Authorization: Bearer $TOKEN" "$CLUSTER_URL/<service>/swagger/doc.json"
+```
+
+**Then check public docs** (`docs.dominodatalab.com/api_guide`) for workflow
+context, field explanations, and richer examples when the swagger schemas
+alone aren't sufficient.
+
+PR #8 caught a wrong jobs endpoint (`/api/jobs/v1/runs` → `/api/jobs/v1/jobs`)
+that had been carried forward from an older version.
 
 ### 5. Smoke-test payloads against the live API
 

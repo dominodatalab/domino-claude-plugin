@@ -33,13 +33,10 @@ Never use `DOMINO_USER_API_KEY`.
 
 ```bash
 TOKEN=$(curl -s http://localhost:8899/access-token)
-BASE="$DOMINO_API_HOST/api/taxonomy/v1"
+# Taxonomy is accessible via its internal Kubernetes service — no external URL needed.
+BASE="http://taxonomy.domino-platform:80/api/taxonomy/v1"
 H="Authorization: Bearer $TOKEN"
 ```
-
-If your cluster's internal gateway (`$DOMINO_API_HOST`) does not expose
-taxonomy and you receive `Public api endpoint not found`, see
-[Troubleshooting](#troubleshooting).
 
 ## Key Concepts
 
@@ -84,7 +81,7 @@ request with `Authorization: Bearer $TOKEN`.
 
 ```bash
 TOKEN=$(curl -s http://localhost:8899/access-token)
-BASE="$DOMINO_API_HOST/api/taxonomy/v1"
+BASE="http://taxonomy.domino-platform:80/api/taxonomy/v1"
 H="Authorization: Bearer $TOKEN"
 
 # 1. Discover the tag you want to apply
@@ -316,10 +313,9 @@ taxonomy across Domino environments.
 The taxonomy service is not registered on the gateway you are calling. Two
 common causes:
 
-1. **Internal vs public gateway.** On some clusters, `$DOMINO_API_HOST`
-   points at an internal gateway (e.g. `nucleus-frontend.domino-platform`)
-   that does not expose the taxonomy service. Try the public hostname of
-   your Domino deployment (the one in your browser address bar) instead.
+1. **Wrong base URL.** Taxonomy is served by `taxonomy.domino-platform:80`, not
+   `$DOMINO_API_HOST` (nucleus-frontend does not proxy taxonomy). Ensure `BASE`
+   is set to `http://taxonomy.domino-platform:80/api/taxonomy/v1`.
 2. **Taxonomy not enabled on this deployment.** Older or stripped-down
    deployments may not include the taxonomy microservice. Confirm with
    your Domino administrator before working around this.
@@ -346,6 +342,22 @@ cascade behavior across multiple IDs.
 
 ## Documentation Reference
 
+Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+**Taxonomy API base:** `http://taxonomy.domino-platform:80` (internal Kubernetes service, reachable from any workspace, job, or app).
+
+Fetch the taxonomy swagger spec (requires bearer token):
+```bash
+TOKEN=$(curl -s http://localhost:8899/access-token)
+
+# Reachable via internal Kubernetes service (works in any workspace, job, or app):
+curl -H "Authorization: Bearer $TOKEN" "http://taxonomy.domino-platform:80/api/taxonomy/swagger/doc.json"
+
+# Browser UI — use the external cluster URL (must be logged in):
+# https://<your-cluster>/api/taxonomy/swagger/index.html
+```
+
+**Public docs (workflow context and field explanations):**
 - [Taxonomy API guide](https://docs.dominodatalab.com/en/cloud/api_guide/fc6b7c/taxonomy-api/)
 - [Skill Authoring Standards](../../CONTRIBUTING.md#skill-authoring-standards)
 - [BULK-OPS.md](./BULK-OPS.md) — bulk-delete + merge-tags + migration patterns

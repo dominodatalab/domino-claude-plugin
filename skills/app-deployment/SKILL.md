@@ -144,7 +144,22 @@ except requests.exceptions.RequestException as err:
 - **Use cases**: Model API calls, app-to-app communication, internal services
 - **Timeout**: Set appropriate timeouts for long-running requests
 
-## Blueprint Reference
+## API Reference
 
-Official React CI/CD Blueprint:
-https://github.com/dominodatalab/domino-blueprints/tree/main/React-app-deployment-with-CICD
+Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+
+Fetch the swagger spec:
+```bash
+# No authentication required for the public API spec
+curl "$DOMINO_API_HOST/assets/public-api.json"
+# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
+```
+
+**Public docs (workflow context and field explanations):**
+- [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
+- [Apps in Domino](https://docs.dominodatalab.com/en/latest/user_guide/e3ec27/apps-in-domino/)
+
+**Blueprint Reference:**
+- [React CI/CD Blueprint](https://github.com/dominodatalab/domino-blueprints/tree/main/React-app-deployment-with-CICD)

@@ -474,10 +474,31 @@ result = df.groupby("category").mean().compute()
 ---
 
 ## Documentation Reference
+
+Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+
+Fetch the NetApp Volumes swagger spec (requires bearer token):
+```bash
+TOKEN=$(curl -s http://localhost:8899/access-token)
+# The swagger UI is only accessible via the external cluster URL (not $DOMINO_API_HOST).
+# Derive it from the JWT iss claim — works in any workspace type.
+CLUSTER_URL=$(echo $TOKEN | cut -d'.' -f2 | python3 -c "
+import sys, base64, json, re
+p = sys.stdin.read().strip()
+p += '=' * (-len(p) % 4)
+print(re.sub(r'/auth/realms/.*', '', json.loads(base64.b64decode(p))['iss']))
+")
+curl -H "Authorization: Bearer $TOKEN" "$CLUSTER_URL/domino-netapp-volumes/swagger/doc.json"
+# Browser UI (must be logged in): $CLUSTER_URL/domino-netapp-volumes/swagger/index.html
+```
+
+**Public docs (workflow context and field explanations):**
+- [NetApp Volumes REST API Reference](https://docs.dominodatalab.com/en/cloud/api_guide/b3b2a1/domino-netapp-volumes-api/)
 - [Work with NetApp Volumes](https://docs.dominodatalab.com/en/cloud/user_guide/06da1b/work-with-netapp-volumes/)
 - [Create NetApp Volumes](https://docs.dominodatalab.com/en/cloud/user_guide/e6887f/create-netapp-volumes-from-domino-or-a-project/)
 - [Add or Remove NetApp Volumes on Projects](https://docs.dominodatalab.com/en/cloud/user_guide/306570/add-or-remove-netapp-volumes-on-projects/)
 - [View and Edit NetApp Volumes](https://docs.dominodatalab.com/en/cloud/user_guide/93fa12/view-and-edit-netapp-volumes/)
 - [Version Data with Snapshots](https://docs.dominodatalab.com/en/cloud/user_guide/dbdbff/version-data-with-snapshots/)
-- [NetApp Volumes REST API Reference](https://docs.dominodatalab.com/en/cloud/api_guide/b3b2a1/domino-netapp-volumes-api/)
 - [Access Data in Domino (comparison guide)](https://docs.dominodatalab.com/en/cloud/user_guide/16d9c1/access-data-in-domino/)

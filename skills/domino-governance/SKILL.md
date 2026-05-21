@@ -11,10 +11,16 @@ This skill provides knowledge for managing model risk governance in Domino Data 
 
 ```bash
 TOKEN=$(curl -s http://localhost:8899/access-token)
-BASE="${DOMINO_GOVERNANCE_HOST:-$DOMINO_API_HOST}/api/governance/v1"
+# Governance is NOT routed through $DOMINO_API_HOST (internal Kubernetes).
+# Derive the external cluster URL from the JWT iss claim — works in any workspace type.
+CLUSTER_URL=$(echo $TOKEN | cut -d'.' -f2 | python3 -c "
+import sys, base64, json, re
+p = sys.stdin.read().strip()
+p += '=' * (-len(p) % 4)
+print(re.sub(r'/auth/realms/.*', '', json.loads(base64.b64decode(p))['iss']))
+")
+BASE="$CLUSTER_URL/api/governance/v1"
 ```
-
-Some deployments expose governance on a different host than the internal API. If so, set `DOMINO_GOVERNANCE_HOST` to override the base URL. Check `domino_project_settings.md` for project-specific overrides.
 
 ## Key Concepts
 
@@ -178,3 +184,25 @@ The UI shows:
 - **Evidence** tab (per stage) — Interactive forms for evidenceSet questions
 - **Attachments** tab — Files, model versions, and reports
 - **Findings** tab — Documented issues with severity
+
+## Documentation Reference
+
+Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+**Governance API base:** External cluster URL only — `$DOMINO_API_HOST` (internal Kubernetes) does not route to this service. Derive the URL from the JWT `iss` claim (works in any workspace type).
+
+Fetch the governance swagger spec (requires bearer token):
+```bash
+TOKEN=$(curl -s http://localhost:8899/access-token)
+CLUSTER_URL=$(echo $TOKEN | cut -d'.' -f2 | python3 -c "
+import sys, base64, json, re
+p = sys.stdin.read().strip()
+p += '=' * (-len(p) % 4)
+print(re.sub(r'/auth/realms/.*', '', json.loads(base64.b64decode(p))['iss']))
+")
+curl -H "Authorization: Bearer $TOKEN" "$CLUSTER_URL/api/governance/swagger/doc.json"
+# Browser UI (must be logged in): $CLUSTER_URL/api/governance/swagger/index.html
+```
+
+**Public docs (workflow context and field explanations):**
+- [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
