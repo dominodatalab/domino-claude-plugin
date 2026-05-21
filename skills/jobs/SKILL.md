@@ -48,16 +48,16 @@ headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json
 
 # Start a job
 response = requests.post(
-    f"{BASE}/v4/runs",
+    f"{BASE}/api/jobs/v1/jobs",
     headers=headers,
     json={
         "projectId": PROJECT_ID,
-        "commandToRun": "python train.py --epochs 100",
+        "runCommand": "python train.py --epochs 100",
         "title": "Training run",
     }
 )
 job = response.json()
-print(f"Job ID: {job['runId']}")
+print(f"Job ID: {job['id']}")
 ```
 
 ### Via Domino CLI
@@ -78,12 +78,12 @@ domino run --direct "pip freeze | grep pandas"
 ### Via REST API
 ```bash
 TOKEN=$(curl -s http://localhost:8899/access-token)
-curl -X POST "$DOMINO_API_HOST/v4/runs" \
+curl -X POST "$DOMINO_API_HOST/api/jobs/v1/jobs" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
     \"projectId\": \"$DOMINO_PROJECT_ID\",
-    \"commandToRun\": \"python train.py\",
+    \"runCommand\": \"python train.py\",
     \"hardwareTierId\": \"tier-id\",
     \"environmentId\": \"env-id\"
   }"
