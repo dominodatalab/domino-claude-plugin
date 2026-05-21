@@ -5,10 +5,11 @@ The Apps API allows you to create, manage, and deploy web applications in Domino
 
 ## Authentication
 ```python
-import requests
+import requests, os
 
-headers = {"X-Domino-Api-Key": "YOUR_API_KEY"}
-base_url = "https://your-domino.com"
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+headers = {"Authorization": f"Bearer {TOKEN}"}
+base_url = os.environ["DOMINO_API_HOST"]
 ```
 
 ---
@@ -322,11 +323,12 @@ Request access to a private app.
 ## Complete Workflow Example
 
 ```python
-import requests
+import requests, os
 import time
 
-headers = {"X-Domino-Api-Key": "YOUR_API_KEY"}
-base_url = "https://your-domino.com"
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+headers = {"Authorization": f"Bearer {TOKEN}"}
+base_url = os.environ["DOMINO_API_HOST"]
 
 # 1. Create app
 response = requests.post(

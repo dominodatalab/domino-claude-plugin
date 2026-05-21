@@ -37,37 +37,28 @@ A Job is a batch execution that runs a script or command in Domino. Unlike works
    - **Compute Environment**: Select environment
 5. Click **Start**
 
-### Via Python SDK
+### Via Python (requests)
 ```python
-import os
-from domino import Domino
+import requests, os
 
-domino = Domino(
-    "project-owner/project-name",
-    api_key=os.environ["DOMINO_USER_API_KEY"],
-    host=os.environ["DOMINO_API_HOST"],
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+BASE = os.environ["DOMINO_API_HOST"]
+PROJECT_ID = os.environ["DOMINO_PROJECT_ID"]
+headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+
+# Start a job
+response = requests.post(
+    f"{BASE}/api/jobs/v1/jobs",
+    headers=headers,
+    json={
+        "projectId": PROJECT_ID,
+        "runCommand": "python train.py --epochs 100",
+        "title": "Training run",
+    }
 )
-
-# Blocking execution - waits for job to complete
-domino_run = domino.runs_start_blocking(
-    ["train.py", "--epochs", "100"],
-    title="Training run from Python SDK"
-)
-print(domino_run)
-
-# Non-blocking execution - returns immediately
-domino_run = domino.runs_start(
-    ["train.py", "--epochs", "100"],
-    title="Training run from Python SDK"
-)
-print(f"Job ID: {domino_run['runId']}")
-
-# Check status of non-blocking run
-run_status = domino.runs_status(domino_run.get("runId"))
-print(f"Status: {run_status['status']}")
+job = response.json()
+print(f"Job ID: {job['id']}")
 ```
-
-**Note:** Environment variables `DOMINO_USER_API_KEY` and `DOMINO_API_HOST` are automatically configured when running within Domino workspaces or jobs.
 
 ### Via Domino CLI
 ```bash
@@ -86,14 +77,16 @@ domino run --direct "pip freeze | grep pandas"
 
 ### Via REST API
 ```bash
-curl -X POST "https://your-domino.com/v4/projects/{project_id}/runs" \
-  -H "X-Domino-Api-Key: YOUR_API_KEY" \
+TOKEN=$(curl -s http://localhost:8899/access-token)
+curl -X POST "$DOMINO_API_HOST/api/jobs/v1/jobs" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "command": "python train.py",
-    "hardwareTierId": "tier-id",
-    "environmentId": "env-id"
-  }'
+  -d "{
+    \"projectId\": \"$DOMINO_PROJECT_ID\",
+    \"runCommand\": \"python train.py\",
+    \"hardwareTierId\": \"tier-id\",
+    \"environmentId\": \"env-id\"
+  }"
 ```
 
 ## Job Commands

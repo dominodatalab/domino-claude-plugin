@@ -229,11 +229,14 @@ Configure notification recipients:
 
 ### Via API
 ```python
-import requests
+import requests, os
+
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+BASE = os.environ["DOMINO_API_HOST"]
 
 response = requests.post(
-    "https://your-domino.com/v4/launchers/{launcher_id}/run",
-    headers={"X-Domino-Api-Key": "YOUR_API_KEY"},
+    f"{BASE}/v4/launchers/{{launcher_id}}/run",
+    headers={"Authorization": f"Bearer {TOKEN}"},
     json={
         "parameters": {
             "start_date": "2024-01-01",

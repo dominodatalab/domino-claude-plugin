@@ -52,11 +52,14 @@ Domino AI Gateway provides:
 ### Via API
 ```python
 # Create endpoint via Domino API
-import requests
+import requests, os
+
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+BASE = os.environ["DOMINO_API_HOST"]
 
 response = requests.post(
-    "https://your-domino.com/api/aigateway/v1/endpoints",
-    headers={"X-Domino-Api-Key": "YOUR_API_KEY"},
+    f"{BASE}/api/aigateway/v1/endpoints",
+    headers={"Authorization": f"Bearer {TOKEN}"},
     json={
         "name": "openai-gpt4",
         "provider": "openai",
@@ -107,13 +110,16 @@ print(response.content)
 
 ### Direct API Call
 ```python
-import requests
+import requests, os
+
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+BASE = os.environ["DOMINO_API_HOST"]
 
 response = requests.post(
-    "https://your-domino.com/api/aigateway/v1/chat/completions",
+    f"{BASE}/api/aigateway/v1/chat/completions",
     headers={
         "Content-Type": "application/json",
-        "X-Domino-Api-Key": "YOUR_DOMINO_API_KEY"
+        "Authorization": f"Bearer {TOKEN}",
     },
     json={
         "model": "openai-gpt4",

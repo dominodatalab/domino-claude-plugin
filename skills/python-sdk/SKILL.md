@@ -46,32 +46,43 @@ RUN pip install dominodatalab
 
 ## Authentication
 
-### API Key
-Get your API key from Domino:
-1. Go to **Account Settings**
-2. Click **API Keys**
-3. Generate or copy key
+### Preferred: Access Token (inside Domino)
 
-### Configure SDK
+When running inside Domino (workspace, job, app, model), fetch a short-lived bearer token from the local sidecar:
+
+```python
+import requests, os
+
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+BASE = os.environ["DOMINO_API_HOST"]
+headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+```
+
+Use `headers` on all `requests` calls. Prefer this over the SDK for new code — see [REST API](#rest-api) section below.
+
+### SDK Authentication (deprecated pattern)
+
+> **Note:** `DOMINO_USER_API_KEY` and the `api_key=` parameter are deprecated and will be removed in a future Domino release. Use the access-token endpoint above for new code. The SDK options below are documented for reference only.
+
 ```python
 from domino import Domino
 
-# Option 1: Pass credentials directly
+# Option 1: Pass credentials directly (deprecated)
 domino = Domino(
     host="https://your-domino.com",
     api_key="your-api-key",
     project="owner/project-name"
 )
 
-# Option 2: Environment variables
+# Option 2: Environment variables (deprecated)
 import os
 os.environ["DOMINO_API_HOST"] = "https://your-domino.com"
 os.environ["DOMINO_USER_API_KEY"] = "your-api-key"
 
 domino = Domino("owner/project-name")
 
-# Option 3: Inside Domino (auto-configured)
-domino = Domino("owner/project-name")  # Uses built-in auth
+# Option 3: Inside Domino (auto-configured via injected env vars)
+domino = Domino("owner/project-name")
 ```
 
 ## Common Operations
@@ -218,23 +229,19 @@ model_info = domino.model_get("model-id")
 
 ### Direct API Calls
 ```python
-import requests
+import requests, os
 
-headers = {
-    "X-Domino-Api-Key": "your-api-key",
-    "Content-Type": "application/json"
-}
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+BASE = os.environ["DOMINO_API_HOST"]
+headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 
 # Get projects
-response = requests.get(
-    "https://your-domino.com/v4/projects",
-    headers=headers
-)
+response = requests.get(f"{BASE}/v4/projects", headers=headers)
 projects = response.json()
 
 # Start a run
 response = requests.post(
-    f"https://your-domino.com/v4/projects/{project_id}/runs",
+    f"{BASE}/v4/projects/{project_id}/runs",
     headers=headers,
     json={
         "command": "python train.py",
@@ -381,13 +388,13 @@ except Exception as e:
 
 ## Best Practices
 
-### 1. Use Environment Variables
+### 1. Use the Access Token Endpoint
 ```python
-import os
+import requests, os
 
-# Don't hardcode credentials
-api_key = os.environ.get("DOMINO_USER_API_KEY")
-host = os.environ.get("DOMINO_API_HOST")
+# Fetch a short-lived token from the local sidecar (inside Domino)
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+BASE = os.environ["DOMINO_API_HOST"]
 ```
 
 ### 2. Handle Rate Limits

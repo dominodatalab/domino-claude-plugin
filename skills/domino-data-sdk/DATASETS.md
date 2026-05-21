@@ -19,9 +19,9 @@ The client uses these environment variables (auto-set in Domino):
 
 | Variable | Purpose |
 |----------|---------|
-| `DOMINO_USER_API_KEY` | API key for authentication |
-| `DOMINO_TOKEN_FILE` | Token file location |
+| `DOMINO_TOKEN_FILE` | Token file location (preferred auth method) |
 | `DOMINO_API_PROXY` | API proxy URL |
+| `DOMINO_USER_API_KEY` | API key — deprecated, will be removed |
 
 ## Get Dataset
 
