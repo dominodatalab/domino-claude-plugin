@@ -97,8 +97,9 @@ Two separate APIs with **different** base paths:
 
 | API | Base Path | Example |
 |-----|-----------|---------|
-| Platform APIs (swagger.json) | `/v4/` | `{DOMINO_API_HOST}/v4/jobs?projectId=...` |
-| Governance APIs (governance_swagger.json) | `/api/governance/v1/` | `{DOMINO_API_HOST}/api/governance/v1/bundles?project_id=...` |
+| Platform APIs (public-api.json) | `/api/` | `{DOMINO_API_HOST}/api/jobs/beta/jobs?projectId=...` |
+| Legacy Platform APIs | `/v4/` | `{DOMINO_API_HOST}/v4/jobs?projectId=...` |
+| Governance APIs | `/api/governance/v1/` | `{CLUSTER_URL}/api/governance/v1/bundles?project_id=...` |
 
 **Do NOT** add `/api/` prefix to v4 platform endpoints.
 
@@ -144,7 +145,7 @@ Before writing or verifying any API call, use the cluster swagger to confirm cur
 
 This skill uses two swagger docs:
 
-**Public API** (covers `/v4/` platform endpoints, no auth required):
+**Public API** (covers `/api/` endpoints — v1, v2, beta — no auth required):
 ```bash
 curl "$DOMINO_API_HOST/assets/public-api.json"
 # Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/

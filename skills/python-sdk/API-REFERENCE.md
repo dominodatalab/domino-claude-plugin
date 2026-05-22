@@ -731,12 +731,12 @@ DELETE /api/admin/v1/deploymentTargets/{targetId}/resourceConfigurations/{config
 
 ### Get Audit Events
 ```
-GET /auditevents
+GET /api/audittrail/v1/auditevents
 ```
 **Query Parameters:**
 - `startTime` (string): Filter start
 - `endTime` (string): Filter end
-- `eventType` (string): Filter by type
+- `eventType` (string): Filter by type (use `event` parameter name per swagger)
 
 ---
 
