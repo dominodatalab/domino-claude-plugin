@@ -5,7 +5,7 @@ This document explains how to attach evidence, answer policy questions, and crea
 ## Setup
 
 ```bash
-API_KEY="$DOMINO_USER_API_KEY"
+TOKEN=$(curl -s http://localhost:8899/access-token)
 BASE="${DOMINO_GOVERNANCE_HOST:-$DOMINO_API_HOST}/api/governance/v1"
 ```
 
@@ -21,7 +21,7 @@ Attaches a registered model version from the Domino Model Registry.
 
 ```bash
 curl -X POST "$BASE/bundles/$BUNDLE_ID/attachments" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "type": "ModelVersion",
@@ -42,7 +42,7 @@ Attaches a file from the project repository (git or DFS).
 ```bash
 # For git-based projects:
 curl -X POST "$BASE/bundles/$BUNDLE_ID/attachments" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "type": "Report",
@@ -82,7 +82,7 @@ Policies define evidence questions via `evidenceSet` items in the YAML. These ap
 
 ```bash
 curl -s "$BASE/policies/$POLICY_ID" \
-  -H "X-Domino-Api-Key: $API_KEY"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 The response structure is:
@@ -103,7 +103,7 @@ Use the `submit-result-to-policy` RPC endpoint:
 
 ```bash
 curl -X POST "$BASE/rpc/submit-result-to-policy" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "bundleId": "bundle-uuid",
@@ -154,7 +154,7 @@ Findings document issues discovered during review.
 
 ```bash
 curl -X POST "$BASE/findings" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "bundleId": "bundle-uuid",
@@ -185,7 +185,7 @@ Get the `policyVersionId` from the bundle response (`GET /bundles/{bundleId}`). 
 
 ```bash
 # Attach multiple project files in one go
-API_KEY="$DOMINO_USER_API_KEY"
+TOKEN=$(curl -s http://localhost:8899/access-token)
 BASE="${DOMINO_GOVERNANCE_HOST:-$DOMINO_API_HOST}/api/governance/v1"
 BUNDLE="your-bundle-id"
 COMMIT=$(git rev-parse HEAD)
@@ -194,7 +194,7 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 for file in "notebooks/01_eda.ipynb" "notebooks/02_train.ipynb" "notebooks/03_validate.ipynb"; do
   name=$(basename "$file")
   curl -s -X POST "$BASE/bundles/$BUNDLE/attachments" \
-    -H "X-Domino-Api-Key: $API_KEY" \
+    -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d "{
       \"type\": \"Report\",

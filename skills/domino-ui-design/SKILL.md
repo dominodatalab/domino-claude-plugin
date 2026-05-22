@@ -87,13 +87,7 @@ Re-acquire the access token on **every** API call (it expires quickly):
 import requests, os
 
 def get_auth_headers():
-    api_key = os.environ.get('API_KEY_OVERRIDE')
-    if api_key:
-        return {'X-Domino-Api-Key': api_key}
-    response = requests.get('http://localhost:8899/access-token')
-    token = response.text.strip()
-    if token.startswith('Bearer '):
-        return {'Authorization': token}
+    token = requests.get('http://localhost:8899/access-token').text.strip()
     return {'Authorization': f'Bearer {token}'}
 ```
 

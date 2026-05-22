@@ -159,21 +159,24 @@ results = index.query(
 
 ## Authentication
 
-The library auto-configures authentication inside Domino workspaces and jobs:
+The library auto-configures authentication inside Domino workspaces and jobs using injected environment variables:
 
 ```python
-# Environment variables used automatically:
-# DOMINO_USER_API_KEY - API key for authentication
-# DOMINO_TOKEN_FILE - Token file location
+# Environment variables used automatically inside Domino:
+# DOMINO_TOKEN_FILE - Token file location (preferred, short-lived)
 # DOMINO_API_PROXY - API proxy URL
 # DOMINO_DATA_API_GATEWAY - Data API gateway (default: http://127.0.0.1:8766)
+#
+# DOMINO_USER_API_KEY - Legacy API key (deprecated, will be removed)
 ```
 
-For external use:
+For external use (e.g., CI/CD outside a Domino execution):
+
+> **Note:** `DOMINO_USER_API_KEY` is deprecated and will be removed in a future Domino release. Prefer running data-SDK code from inside a Domino workspace or job where token-based auth is injected automatically.
 
 ```python
 import os
-os.environ["DOMINO_USER_API_KEY"] = "your-api-key"
+os.environ["DOMINO_USER_API_KEY"] = "your-api-key"  # deprecated
 os.environ["DOMINO_API_HOST"] = "https://your-domino.com"
 
 from domino_data.data_sources import DataSourceClient

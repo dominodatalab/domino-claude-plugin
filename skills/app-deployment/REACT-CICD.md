@@ -161,7 +161,7 @@ jobs:
 
 | Secret | Description |
 |--------|-------------|
-| `DOMINO_USER_API_KEY` | Domino API key for authentication |
+| `DOMINO_USER_API_KEY` | Domino API key for authentication (**external CI/CD only** — the local access-token sidecar is not available in GitHub Actions; API keys are deprecated for in-cluster use) |
 | `GH_PAT` | GitHub Personal Access Token for Domino Git credentials |
 | `MODEL_API_TOKEN` | Bearer token for React app to call Model API |
 
@@ -285,7 +285,7 @@ app:
 ### 2. Add Secrets to Each Environment
 
 For each environment (uat, production):
-- `DOMINO_USER_API_KEY`
+- `DOMINO_USER_API_KEY` (external CI/CD auth — required here since GitHub Actions cannot reach the in-cluster sidecar)
 - `GH_PAT`
 - `MODEL_API_TOKEN`
 

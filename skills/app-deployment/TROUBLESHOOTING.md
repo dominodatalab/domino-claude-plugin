@@ -286,8 +286,9 @@ streamlit run app.py \
 # Go to Project > Apps > Select App > Logs
 
 # Or via API
-curl -H "X-Domino-Api-Key: $API_KEY" \
-  "$DOMINO_URL/v4/apps/$APP_ID/logs"
+TOKEN=$(curl -s http://localhost:8899/access-token)
+curl -H "Authorization: Bearer $TOKEN" \
+  "$DOMINO_API_HOST/v4/apps/$APP_ID/logs"
 ```
 
 ### Test Port Binding Locally

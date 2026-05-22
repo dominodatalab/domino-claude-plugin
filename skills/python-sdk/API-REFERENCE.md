@@ -4,16 +4,20 @@ Complete reference for Domino Platform REST API endpoints.
 
 ## Authentication
 
-All API calls require authentication via API key:
+All API calls require authentication. Inside Domino (workspace, job, app, model), use the local access-token endpoint:
 
 ```bash
-# Header authentication
-curl -H "X-Domino-Api-Key: YOUR_API_KEY" \
-  https://your-domino.com/api/projects/v1/projects/{projectId}
+# Bash
+TOKEN=$(curl -s http://localhost:8899/access-token)
+curl -H "Authorization: Bearer $TOKEN" \
+  "$DOMINO_API_HOST/api/projects/v1/projects/{projectId}"
+```
 
-# Or via Python
-import requests
-headers = {"X-Domino-Api-Key": "YOUR_API_KEY"}
+```python
+# Python
+import requests, os
+TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
+headers = {"Authorization": f"Bearer {TOKEN}"}
 response = requests.get(url, headers=headers)
 ```
 

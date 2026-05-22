@@ -32,7 +32,7 @@ Policies with `enforceSequentialOrder: true` require stages to be completed in o
 ### Create the Bundle
 ```bash
 curl -X POST "$BASE/bundles" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "projectId": "your-project-id",
@@ -63,7 +63,7 @@ After creating a bundle, inspect it to find the stage IDs:
 
 ```bash
 curl -s "$BASE/bundles/$BUNDLE_ID" \
-  -H "X-Domino-Api-Key: $API_KEY"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 The response includes a `stages` array:
@@ -81,7 +81,7 @@ The response includes a `stages` array:
 
 **Important**: The bundle response does NOT include evidenceSet IDs. To get those, fetch the policy directly:
 ```bash
-curl -s "$BASE/policies/$POLICY_ID" -H "X-Domino-Api-Key: $API_KEY"
+curl -s "$BASE/policies/$POLICY_ID" -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Progressing Through Stages
@@ -90,7 +90,7 @@ curl -s "$BASE/policies/$POLICY_ID" -H "X-Domino-Api-Key: $API_KEY"
 When you begin work on a stage:
 ```bash
 curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"status": "In Progress"}'
 ```
@@ -99,7 +99,7 @@ curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
 After all evidence is attached and questions answered:
 ```bash
 curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"status": "Complete"}'
 ```
@@ -127,7 +127,7 @@ Each stage has designated approver organizations. Approval typically requires a 
 At any point, inspect the current state:
 ```bash
 curl -s "$BASE/bundles/$BUNDLE_ID" \
-  -H "X-Domino-Api-Key: $API_KEY"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Look at:
@@ -142,7 +142,7 @@ Look at:
 To see all bundles:
 ```bash
 curl -s "$BASE/bundles?projectId=$PROJECT_ID" \
-  -H "X-Domino-Api-Key: $API_KEY"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 This returns summaries of all bundles, useful for checking if a bundle already exists before creating a duplicate.

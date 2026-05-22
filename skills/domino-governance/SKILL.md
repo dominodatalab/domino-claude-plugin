@@ -10,7 +10,7 @@ This skill provides knowledge for managing model risk governance in Domino Data 
 ## Configuration
 
 ```bash
-API_KEY="$DOMINO_USER_API_KEY"
+TOKEN=$(curl -s http://localhost:8899/access-token)
 BASE="${DOMINO_GOVERNANCE_HOST:-$DOMINO_API_HOST}/api/governance/v1"
 ```
 
@@ -39,7 +39,7 @@ A **finding** documents a problem, risk, or concern discovered during review. Fi
 
 ## Governance API Reference
 
-All endpoints are under `$BASE` (`/api/governance/v1`). Authenticate with `X-Domino-Api-Key: $API_KEY`.
+All endpoints are under `$BASE` (`/api/governance/v1`). Authenticate with `Authorization: Bearer $TOKEN`.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -60,7 +60,7 @@ Follow these steps when setting up governance for a model:
 ### Step 1: Discover Policies
 ```bash
 curl -s "$BASE/policy-overviews" \
-  -H "X-Domino-Api-Key: $API_KEY"
+  -H "Authorization: Bearer $TOKEN"
 ```
 Review available templates. Note the `id` of the policy you want to use.
 
@@ -70,7 +70,7 @@ The project ID is needed to create a bundle. Use the `DOMINO_PROJECT_ID` environ
 ### Step 3: Create a Bundle
 ```bash
 curl -X POST "$BASE/bundles" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "projectId": "your-project-id",
@@ -84,7 +84,7 @@ Save the returned `id` as your `BUNDLE_ID`.
 ### Step 4: Inspect the Bundle
 ```bash
 curl -s "$BASE/bundles/$BUNDLE_ID" \
-  -H "X-Domino-Api-Key: $API_KEY"
+  -H "Authorization: Bearer $TOKEN"
 ```
 This reveals the policy's stage structure, attachments, and approval status. **Note**: This does NOT return evidenceSet IDs — see Step 6 for how to discover those.
 
@@ -94,12 +94,12 @@ See [EVIDENCE-WORKFLOW.md](./EVIDENCE-WORKFLOW.md) for full details. Two attachm
 ```bash
 # Attach a registered model version
 curl -X POST "$BASE/bundles/$BUNDLE_ID/attachments" \
-  -H "X-Domino-Api-Key: $API_KEY" -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"type":"ModelVersion","identifier":{"name":"model-name","version":5},"name":"Display Name"}'
 
 # Attach a project file (notebook, report, etc.)
 curl -X POST "$BASE/bundles/$BUNDLE_ID/attachments" \
-  -H "X-Domino-Api-Key: $API_KEY" -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"type":"Report","identifier":{"branch":"main","commit":"abc...","source":"git","filename":"path/to/file"},"name":"Display Name"}'
 ```
 
@@ -113,7 +113,7 @@ EvidenceSet IDs are NOT in the bundle response. Fetch them from the **policy** e
 
 ```bash
 curl -s "$BASE/policies/$POLICY_ID" \
-  -H "X-Domino-Api-Key: $API_KEY"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 The response contains `stages[]` → `evidenceSet[]` → `artifacts[]` with full UUIDs for each evidence item and artifact.
@@ -122,7 +122,7 @@ The response contains `stages[]` → `evidenceSet[]` → `artifacts[]` with full
 
 ```bash
 curl -X POST "$BASE/rpc/submit-result-to-policy" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "bundleId": "bundle-uuid",
@@ -146,7 +146,7 @@ curl -X POST "$BASE/rpc/submit-result-to-policy" \
 As evidence is collected and approvals obtained:
 ```bash
 curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
-  -H "X-Domino-Api-Key: $API_KEY" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"status": "Complete"}'
 ```
@@ -154,7 +154,7 @@ curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
 ### Step 8: Document Findings (if any)
 ```bash
 curl -X POST "$BASE/findings" \
-  -H "X-Domino-Api-Key: $API_KEY" -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{
     "bundleId": "bundle-uuid",
     "policyVersionId": "policy-version-uuid",
