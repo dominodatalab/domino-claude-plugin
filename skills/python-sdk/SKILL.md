@@ -444,6 +444,19 @@ For comprehensive REST API documentation, see these specialized guides:
 | [API-REFERENCE.md](API-REFERENCE.md) | Complete endpoint reference |
 
 ## Documentation Reference
+
+Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+
+Fetch the swagger spec:
+```bash
+# No authentication required for the public API spec
+curl "$DOMINO_API_HOST/assets/public-api.json"
+# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
+```
+
+**Public docs (workflow context and field explanations):**
 - [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
 - [REST API Reference](https://docs.dominodatalab.com/en/latest/api_guide/8c929e/domino-platform-api-reference/)
 - [python-domino Library](https://docs.dominodatalab.com/en/latest/api_guide/c5ef26/the-python-domino-library/)

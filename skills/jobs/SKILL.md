@@ -296,7 +296,21 @@ domino.runs_stop(run_id)
 - Optimize data loading (chunking, generators)
 - Clear variables when no longer needed
 
-## Documentation Reference
+## API Reference
+
+Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+
+Fetch the swagger spec:
+```bash
+# No authentication required for the public API spec
+curl "$DOMINO_API_HOST/assets/public-api.json"
+# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
+```
+
+**Public docs (workflow context and field explanations):**
+- [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
 - [Create and run Jobs](https://docs.dominodatalab.com/en/latest/user_guide/af97b7/create-and-run-jobs/)
 - [Scheduled Jobs](https://docs.dominodatalab.com/en/latest/user_guide/673577/scheduled-jobs/)
 - [Work with Jobs](https://docs.dominodatalab.com/en/latest/user_guide/942549/work-with-jobs/)

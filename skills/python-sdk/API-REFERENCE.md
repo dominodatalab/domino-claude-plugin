@@ -731,12 +731,12 @@ DELETE /api/admin/v1/deploymentTargets/{targetId}/resourceConfigurations/{config
 
 ### Get Audit Events
 ```
-GET /auditevents
+GET /api/audittrail/v1/auditevents
 ```
 **Query Parameters:**
 - `startTime` (string): Filter start
 - `endTime` (string): Filter end
-- `eventType` (string): Filter by type
+- `eventType` (string): Filter by type (use `event` parameter name per swagger)
 
 ---
 
@@ -767,5 +767,18 @@ Most list endpoints support pagination:
 ```
 
 ## Documentation Reference
+
+Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+
+Fetch the swagger spec:
+```bash
+# No authentication required for the public API spec
+curl "$DOMINO_API_HOST/assets/public-api.json"
+# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
+```
+
+**Public docs (workflow context and field explanations):**
 - [REST API Reference](https://docs.dominodatalab.com/en/latest/api_guide/8c929e/domino-platform-api-reference/)
 - [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)

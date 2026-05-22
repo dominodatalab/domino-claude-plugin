@@ -299,6 +299,20 @@ Error: Model 'model-name' not found
 - Check endpoint exists and is active
 - Confirm you have access to the endpoint
 
-## Documentation Reference
+## API Reference
+
+Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+
+Fetch the swagger spec:
+```bash
+# No authentication required for the public API spec
+curl "$DOMINO_API_HOST/assets/public-api.json"
+# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
+```
+
+**Public docs (workflow context and field explanations):**
+- [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
 - [AI Gateway](https://docs.dominodatalab.com/en/latest/user_guide/c9ac47/ai-gateway/)
 - [Monitor AI Gateway LLM logs](https://docs.dominodatalab.com/en/cloud/admin_guide/984c09/monitor-ai-gateway-large-language-model-llm-logs/)
