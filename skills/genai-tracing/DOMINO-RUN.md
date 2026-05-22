@@ -2,6 +2,29 @@
 
 The `DominoRun` context manager groups traces into runs, enabling aggregation, configuration tracking, and organized experiment viewing.
 
+## When to Use DominoRun (and When NOT To)
+
+| Context | Use DominoRun? | Why |
+|---------|---------------|-----|
+| Batch evaluation scripts | Yes | Groups traces into a named run in Experiments UI |
+| Domino Jobs | Yes | Run-level aggregation and config tracking |
+| **Deployed Domino Apps** | **No** | `DominoRun` overrides Domino's auto-routing. Traces go to a custom experiment instead of `agent_experiment_{app_id}`, and the **App Performance tab won't see them**. |
+| Workspaces (interactive) | Optional | Useful for development, but not required |
+
+**For deployed Apps:** Let `@add_tracing` create traces directly (no `DominoRun` wrapper, no `mlflow.set_experiment()`). Domino auto-routes traces to the app's `agent_experiment_{app_id}` experiment, which the Performance tab reads from.
+
+```python
+# DEPLOYED APP — do NOT use DominoRun
+@router.post("/chat")
+async def chat(request: ChatRequest):
+    return await run_agent_turn(request)  # @add_tracing handles tracing
+
+# BATCH EVALUATION — use DominoRun
+with DominoRun(run_name="evaluation-batch") as run:
+    for item in test_data:
+        result = run_agent_turn(item)
+```
+
 ## Basic Usage
 
 ### Simple Run
@@ -20,6 +43,33 @@ with DominoRun() as run:
 with DominoRun(run_name="production-evaluation-2024") as run:
     for item in test_data:
         result = my_agent(item)
+```
+
+### Resilient Wrapper Pattern
+
+In production code, wrap `DominoRun` to tolerate import failures and broken MLflow state:
+
+```python
+from contextlib import contextmanager
+
+try:
+    from domino.agents.logging import DominoRun as _DominoRun
+    _HAS_DOMINO_SDK = True
+except ImportError:
+    _HAS_DOMINO_SDK = False
+    _DominoRun = None
+
+@contextmanager
+def DominoRun():
+    """DominoRun that tolerates broken MLflow tracking state."""
+    if _DominoRun is None:
+        yield None
+        return
+    try:
+        with _DominoRun() as run:
+            yield run
+    except Exception:
+        yield None
 ```
 
 ## Configuration File
@@ -216,92 +266,6 @@ for i, batch in enumerate(batches):
     results = process_batch(batch, f"batch-{i}")
 ```
 
-### Progress Tracking
-
-```python
-from tqdm import tqdm
-from domino.agents.logging import DominoRun
-
-with DominoRun(run_name="full-evaluation") as run:
-    for item in tqdm(test_data, desc="Processing"):
-        result = my_agent(item)
-```
-
-## Accessing Run Information
-
-### During Run
-
-```python
-with DominoRun() as run:
-    # Access run ID
-    print(f"Run ID: {run.run_id}")
-
-    # Access experiment info
-    print(f"Experiment: {run.experiment_id}")
-
-    result = my_agent(query)
-```
-
-### After Run
-
-```python
-import mlflow
-
-# Get run by ID
-run = mlflow.get_run(run_id)
-
-# Access metrics
-print(run.data.metrics)
-
-# Access parameters (from config.yaml)
-print(run.data.params)
-
-# Access artifacts
-artifacts = mlflow.artifacts.list_artifacts(run_id)
-```
-
-## Multiple Runs Comparison
-
-### Sequential Runs
-
-```python
-run_ids = []
-
-for config_version in ["v1", "v2", "v3"]:
-    with DominoRun(run_name=f"config-{config_version}") as run:
-        for item in test_data:
-            result = my_agent(item, config=config_version)
-        run_ids.append(run.run_id)
-
-# Compare runs
-import mlflow
-runs = mlflow.search_runs(run_ids=run_ids)
-print(runs[["run_id", "metrics.accuracy_mean"]])
-```
-
-### A/B Testing Pattern
-
-```python
-from domino.agents.logging import DominoRun
-
-def run_ab_test(test_data, model_a, model_b):
-    results = {}
-
-    # Test Model A
-    with DominoRun(run_name=f"ab-test-model-a") as run_a:
-        for item in test_data:
-            result = agent_with_model(item, model_a)
-        results["model_a"] = run_a.run_id
-
-    # Test Model B
-    with DominoRun(run_name=f"ab-test-model-b") as run_b:
-        for item in test_data:
-            result = agent_with_model(item, model_b)
-        results["model_b"] = run_b.run_id
-
-    return results
-```
-
 ## Error Handling
 
 ### Graceful Error Handling
@@ -319,24 +283,6 @@ with DominoRun() as run:
             continue  # Continue with next item
 ```
 
-### Run-Level Error Tracking
-
-```python
-from domino.agents.logging import DominoRun
-import mlflow
-
-with DominoRun() as run:
-    error_count = 0
-    for item in data:
-        try:
-            result = my_agent(item)
-        except Exception as e:
-            error_count += 1
-
-    # Log run-level metric
-    mlflow.log_metric("total_errors", error_count)
-```
-
 ## Best Practices
 
 ### 1. Use Descriptive Run Names
@@ -351,34 +297,45 @@ with DominoRun(run_name="test"):
 with DominoRun():  # No name at all
 ```
 
-### 2. Match Aggregation to Evaluator Metrics
+### 2. Don't Use DominoRun in Deployed Apps
 
 ```python
-# Evaluator returns these metrics
-def evaluator(inputs, output):
-    return {
-        "accuracy": 0.9,
-        "latency_ms": 150,
-    }
+# BAD — traces won't appear in App Performance tab
+@router.post("/chat")
+async def chat(request):
+    with DominoRun():  # Don't do this in a deployed app
+        return await run_agent(request)
 
-# Aggregations should match
-aggregated_metrics = [
-    ("accuracy", "mean"),      # Matches "accuracy"
-    ("latency_ms", "mean"),    # Matches "latency_ms"
-]
+# GOOD — @add_tracing handles tracing, Domino auto-routes to Performance tab
+@router.post("/chat")
+async def chat(request):
+    return await run_agent(request)  # run_agent has @add_tracing
 ```
 
-### 3. Use Config Files for Reproducibility
+### 3. Don't Call mlflow.set_experiment() in Deployed Apps
 
 ```python
-# Always log configuration
-with DominoRun(agent_config_path="config.yaml") as run:
-    pass
+# BAD — overrides Domino's auto-routing
+@asynccontextmanager
+async def lifespan(app):
+    mlflow.set_experiment("my-custom-experiment")  # Don't do this
+    yield
 
-# Now you can reproduce any run by checking its parameters
+# GOOD — just enable autolog, let Domino handle experiment routing
+@asynccontextmanager
+async def lifespan(app):
+    try:
+        mlflow.openai.autolog()
+    except Exception:
+        pass
+    try:
+        mlflow.anthropic.autolog()
+    except Exception:
+        pass
+    yield
 ```
 
-### 4. Keep Runs Focused
+### 4. Keep Runs Focused (Evaluation Mode)
 
 ```python
 # Good: One run per evaluation type
