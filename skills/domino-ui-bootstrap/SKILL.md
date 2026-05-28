@@ -194,7 +194,28 @@ If `CLAUDE.md` already exists, **merge** rather than overwrite — preserve what
 
 ---
 
-## Step 10 — Verify
+## Step 10 — Update `.gitignore`
+
+The repo root needs a `.gitignore` that excludes the things this skill (and a normal Vite + Domino workflow) generates but that shouldn't be committed. Make sure the following entries are present:
+
+- `node_modules/` — npm install output.
+- `dist/` and `build/` — Vite production builds.
+- `.vite/` — Vite's dev cache.
+- `*.log`, `npm-debug.log*`, `yarn-debug.log*`, `yarn-error.log*` — package manager logs.
+- `.DS_Store`, `Thumbs.db` — OS junk.
+- `.env`, `.env.local`, `.env.*.local` — local environment files. Keep `.env.example` if the project has one.
+- `.claude/settings.local.json` — this is the per-user MCP/permissions file. It can leak machine-specific paths and personal preferences. `.mcp.json` at the repo root **should** be committed (it's shared project config); `.claude/settings.local.json` should not.
+
+**How to handle the file itself:**
+
+- If `.gitignore` doesn't exist, create it with the entries above.
+- If it already exists (Vite's scaffold writes one), read it first and **append only the entries that aren't already covered**. Don't duplicate lines and don't reorder what's there. A grep-and-append per missing entry is fine.
+- Preserve any project-specific patterns the user already has (their own ignored directories, secrets paths, build artifacts from other tools, etc.).
+- If the user has committed something this skill is now telling git to ignore (e.g., they checked in `node_modules` once by accident, or `.claude/settings.local.json` is already tracked), don't run `git rm` on their behalf — surface it and let them decide.
+
+---
+
+## Step 11 — Verify
 
 The most reliable verification is a clean production build:
 
@@ -214,7 +235,7 @@ If `build` fails:
 
 ---
 
-## Step 11 — Hand off
+## Step 12 — Hand off
 
 Tell the user:
 
@@ -237,5 +258,5 @@ Tell the user:
 ## What this skill is not for
 
 - Editing `@dominodatalab/extensions-tools` source. Only the published npm package is consumed; upstream changes need a release from the library repo.
-- Setting up test runners, CI, Tailwind, or other tooling on top. If the user wants those, finish the Domino bootstrap first (Step 10 green), then handle them separately — too many things can fail at once otherwise.
+- Setting up test runners, CI, Tailwind, or other tooling on top. If the user wants those, finish the Domino bootstrap first (Step 11 green), then handle them separately — too many things can fail at once otherwise.
 - Authenticating to private npm registries. If install fails on auth, ask the user; don't guess at credentials or workarounds.
