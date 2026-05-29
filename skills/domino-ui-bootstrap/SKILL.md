@@ -31,12 +31,13 @@ Treat these as invariants the project must satisfy by the end. How you get there
 
 Ask the user, in a single turn, for:
 
-1. **Target path** — the absolute or workspace-relative path. Ask this as a plain chat question, not a multiple-choice picker, because paths are free-form.
-2. **Display name** — free-form, any string. Used in `CLAUDE.md`, UI titles, and the hand-off message. Example: `Domino Frontend`.
-3. **Package name** — the value that goes in `package.json`'s `name` field. npm requires lowercase, no spaces, no leading dot or underscore, URL-safe. Default to the kebab-case-lowercase of the display name (e.g. `Domino Frontend` → `domino-frontend`) and confirm. If retrofitting, default to whatever the existing `package.json` says and confirm.
-4. **What to do if the path has unexpected content** — present this with `ask_user_input_v0` once you've inspected the directory (Step 2). The options depend on what you find; see Step 2.
+1. **Target path** — the absolute or workspace-relative path where the Vite + React app will live ("the app folder"). Ask this as a plain chat question, not a multiple-choice picker, because paths are free-form.
+2. **Project root path** — where shared project config (`CLAUDE.md`, `.mcp.json`, `.claude/settings.local.json`) should live. Default to the target path; set this to a parent directory when the target is a subfolder of a larger repo (monorepos, an existing project with apps under `apps/`, etc.) — those files belong at the repo root, not nested inside the app folder. Ask explicitly; don't assume. If the user doesn't volunteer one, propose the target path and confirm.
+3. **Display name** — free-form, any string. Used in `CLAUDE.md`, UI titles, and the hand-off message. Example: `Domino Frontend`.
+4. **Package name** — the value that goes in `package.json`'s `name` field. npm requires lowercase, no spaces, no leading dot or underscore, URL-safe. Default to the kebab-case-lowercase of the display name (e.g. `Domino Frontend` → `domino-frontend`) and confirm. If retrofitting, default to whatever the existing `package.json` says and confirm.
+5. **What to do if the path has unexpected content** — present this with `ask_user_input_v0` once you've inspected the directory (Step 2). The options depend on what you find; see Step 2.
 
-If the user has already given any of these in the conversation, skip the corresponding question. If they give only one name, treat it as the display name and derive the package name from it — don't ask twice for the same information, just confirm the normalized package name.
+If the user has already given any of these in the conversation, skip the corresponding question. If they give only one name, treat it as the display name and derive the package name from it — don't ask twice for the same information, just confirm the normalized package name. Throughout the rest of this skill, "project root" means the path from question 2 (equal to the target path unless the user said otherwise) and "app folder" means the target path from question 1.
 
 ---
 
@@ -52,7 +53,7 @@ Look for:
   - Is `vite` a devDependency? Some other bundler (`webpack`, `next`, `parcel`, `cra`)?
   - Does `@dominodatalab/extensions-tools` already appear (any version)?
 - Is there a `src/` directory with `main.tsx` / `main.jsx` / `index.tsx` / `index.jsx`?
-- Is there an existing `.mcp.json`, `.claude/`, or `CLAUDE.md`?
+- At the **project root** (from Step 1 — may equal the app folder, may not): is there an existing `.mcp.json`, `.claude/`, or `CLAUDE.md`? These live at the project root, not the app folder, so check there even when the app folder is a fresh empty subdirectory.
 
 Classify the directory into one of these states, then ask the user how to proceed if needed:
 
@@ -154,14 +155,14 @@ Likely failures:
 
 ## Step 6 — Register the Storybook MCP
 
-The Storybook MCP is what lets future Claude sessions look up real component props instead of guessing. Two files need to exist at the repo root with the right shape; their exact formatting doesn't matter, but the contents do.
+The Storybook MCP is what lets future Claude sessions look up real component props instead of guessing. Two files need to exist at the **project root** (from Step 1 — not the app folder if those are different paths) with the right shape; their exact formatting doesn't matter, but the contents do. They must sit in the same directory: if `.mcp.json` and `.claude/settings.local.json` get split across folders, Claude Code won't apply the allow-list to the registered MCP and the server stays disabled.
 
 **`.mcp.json`** must register a server named `storybook` that points at the Domino library's live Storybook:
 
 - URL: `https://main--60c0de3f60dd96003bdcb1a1.chromatic.com/mcp`
 - Transport: `http`
 
-If the file already exists with other MCP servers, merge — don't overwrite. Add the `storybook` entry alongside whatever's there. If a `storybook` server is already registered at a different URL, ask the user before changing it.
+If a `.mcp.json` already exists at the project root (with other MCP servers, or from a prior bootstrap), merge — don't overwrite. Add the `storybook` entry alongside whatever's there. If a `storybook` server is already registered at a different URL, ask the user before changing it. If no `.mcp.json` exists at the project root, create one there — never create one inside the app folder.
 
 **`.claude/settings.local.json`** must:
 
@@ -169,7 +170,7 @@ If the file already exists with other MCP servers, merge — don't overwrite. Ad
 - Enable project-level MCP servers (`enableAllProjectMcpServers: true`).
 - List `storybook` in the enabled servers.
 
-If the file already exists, merge the relevant fields rather than overwriting. Preserve any other permissions or settings already there.
+If the file already exists at the project root, merge the relevant fields rather than overwriting. Preserve any other permissions or settings already there. If it doesn't exist, create it at the project root (next to `.mcp.json`), not inside the app folder.
 
 ---
 
@@ -262,7 +263,7 @@ These are the components and prop shapes confirmed to work against the published
 
 ## Step 10 — Write or update `CLAUDE.md`
 
-The repo root should have a `CLAUDE.md` that tells future Claude Code sessions four things:
+The **project root** (from Step 1 — not the app folder if those are different paths) should have a `CLAUDE.md` that tells future Claude Code sessions four things:
 
 1. The npm package is `@dominodatalab/extensions-tools`. All imports in this project use that name.
 2. Storybook code snippets (and the `node_modules/@dominodatalab/extensions-tools/README.md`) import from `@domino/base-components` — that's a Storybook alias. Rewrite to `@dominodatalab/extensions-tools` before pasting.
@@ -275,13 +276,13 @@ The repo root should have a `CLAUDE.md` that tells future Claude Code sessions f
 
 It should also describe the MCP lookup workflow (`list-all-documentation` → `get-documentation` → `get-documentation-for-story`), note that React 18 / react-router 5 versions are pinned for peer-dep reasons, and remind that all backend URLs route through `apiBase` (not root-absolute paths).
 
-If `CLAUDE.md` already exists, **merge** rather than overwrite — preserve whatever project-specific guidance is there, and add a Domino section. The user's existing `CLAUDE.md` may have important info about their codebase that you'd erase by replacing it.
+If a `CLAUDE.md` already exists at the project root, **merge** rather than overwrite — preserve whatever project-specific guidance is there, and add a Domino section. The user's existing `CLAUDE.md` may have important info about their codebase that you'd erase by replacing it. If no `CLAUDE.md` exists at the project root, create one there — never inside the app folder, even when the app folder is a subdirectory of the project root.
 
 ---
 
 ## Step 11 — Update `.gitignore`
 
-The repo root needs a `.gitignore` that excludes the things this skill (and a normal Vite + Domino workflow) generates but that shouldn't be committed. Make sure the following entries are present:
+The **app folder** (the target path from Step 1) needs a `.gitignore` that excludes the things this skill (and a normal Vite + Domino workflow) generates but that shouldn't be committed. Make sure the following entries are present:
 
 - `node_modules/` — npm install output.
 - `dist/` and `build/` — Vite production builds.
@@ -289,7 +290,7 @@ The repo root needs a `.gitignore` that excludes the things this skill (and a no
 - `*.log`, `npm-debug.log*`, `yarn-debug.log*`, `yarn-error.log*` — package manager logs.
 - `.DS_Store`, `Thumbs.db` — OS junk.
 - `.env`, `.env.local`, `.env.*.local` — local environment files. Keep `.env.example` if the project has one.
-- `.claude/settings.local.json` — this is the per-user MCP/permissions file. It can leak machine-specific paths and personal preferences. `.mcp.json` at the repo root **should** be committed (it's shared project config); `.claude/settings.local.json` should not.
+- `.claude/settings.local.json` — this is the per-user MCP/permissions file. It can leak machine-specific paths and personal preferences. `.mcp.json` **should** be committed (it's shared project config); `.claude/settings.local.json` should not. Only add this entry when the project root equals the app folder — when they differ, `.claude/settings.local.json` lives at the project root (Step 6), so it belongs in *that* directory's `.gitignore`. Don't create or modify a project-root `.gitignore` for this; surface the missing entry to the user and let them decide.
 
 **How to handle the file itself:**
 
