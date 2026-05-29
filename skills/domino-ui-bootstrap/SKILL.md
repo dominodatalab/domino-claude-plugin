@@ -22,6 +22,7 @@ A handful of choices look arbitrary but aren't — they match the rest of the Do
 - **HashRouter, not BrowserRouter.** This is what the library expects internally.
 - **The npm package name is `@dominodatalab/extensions-tools`.** Storybook code snippets show imports from `@domino/base-components` — that's a Storybook-internal alias. Rewrite every such import to `@dominodatalab/extensions-tools` before pasting into a Domino project. This is the single most common mistake.
 - **`DominoThemeProviderDecorator` wraps the whole React tree.** Without it, Domino components render unstyled or crash.
+- **URLs must survive the proxy path.** Domino serves the app under a prefix (e.g. `/preview/<appId>/`), so asset and API URLs must be document-relative — not root-absolute. Vite's default `base: '/'` emits `/assets/…` and bypasses the proxy; user-written `fetch('/api/…')` does the same. Set `base: './'` and build API URLs against `document.baseURI`. See Step 8. Invisible in local dev (`pathname` is `/`), surfaces only after deployment.
 
 Treat these as invariants the project must satisfy by the end. How you get there depends on what's already in the target directory.
 
@@ -193,25 +194,40 @@ A heads-up worth passing to the user: in a standalone (non-Domino-backend) envir
 
 ---
 
-## Step 8 — Make API calls proxy-aware
+## Step 8 — Make URLs proxy-aware (assets AND API calls)
 
-When this app runs inside Domino, it's served at `https://<host>/apps-internal/<appId>/` (or a vanity URL). Static assets work because Vite's `base: './'` (which the scaffold sets) emits relative URLs. **User-written fetch / XHR / WebSocket URLs do not get the same treatment** — a root-absolute call like `fetch('/api/project')` resolves to the bare domain, bypasses the proxy entirely, and Domino's own frontend returns 404. The failure is silent in dev (where `pathname` is `/`, so root-absolute happens to work) and only surfaces after deployment.
+When this app runs inside Domino it's served under a proxy prefix (e.g. `https://<host>/preview/<appId>/`). Root-absolute URLs bypass the proxy and 404 — both asset tags emitted as `/assets/index-*.js` and user-written `fetch('/api/…')` calls. This is invisible in local dev (where `pathname` is `/` and root-absolute happens to work) and only surfaces after deployment.
 
-Make every API URL document-relative. The helper:
+Two things to get right:
+
+### 8a. `base: './'` in `vite.config.ts` (the scaffold does NOT set this)
+
+The `npm create vite` scaffold leaves `base` at its default `/`, which emits root-absolute asset URLs (`/assets/…`) that bypass the proxy. Set it explicitly so emitted assets are document-relative:
 
 ```ts
-const apiBase = window.location.pathname.replace(/[^/]*$/, '') + 'api'
-fetch(`${apiBase}/project`)
+export default defineConfig({
+  base: './',
+  plugins: [react()],
+})
 ```
 
-This preserves whatever prefix the proxy mounted the app at, and still works in local dev.
+### 8b. `apiBase` resolved against `document.baseURI`
+
+Build API URLs off `document.baseURI` so they resolve against the proxied path:
+
+```ts
+const apiBase = new URL('api', document.baseURI).href
+fetch(`${apiBase}/projects`)
+```
+
+Don't construct API URLs from `window.location.pathname` (`pathname.replace(/[^/]*$/, '') + 'api'` etc.) — those either bypass the proxy or break under deeper routes. Use `document.baseURI`.
 
 **When to apply this:**
 
-- **Fresh scaffolds / starter screens you're generating:** if the starter screen calls any backend endpoint, write it through `apiBase` from the start. Include the helper in the file.
-- **Retrofits:** scan the existing code for `fetch('/`, `axios.get('/`, `new WebSocket('ws`, etc. If you find root-absolute API URLs, surface them to the user and recommend the helper. **Don't silently rewrite their fetches** — the URLs may be intentional (e.g. talking to a different host), and a wholesale rewrite is the kind of change the user needs to see.
+- **Fresh scaffolds / starter screens you're generating:** write 8a and 8b in from the start. If the starter screen calls a backend, route it through `apiBase`.
+- **Retrofits:** add 8a if `base` is missing/`/`. For API calls, scan for `fetch('/`, `axios.get('/`, `new WebSocket('ws`, and any `pathname`-based URL construction. Surface root-absolute or pathname-based URLs and recommend the `document.baseURI` form — **don't silently rewrite their fetches** (some may intentionally target another host).
 
-This overlaps with the `dominodatalab:app-deployment` skill, which covers the full deploy shape (manifest, port binding, build output location). Point the user there if they're heading toward an actual app publish.
+This overlaps with the `dominodatalab:app-deployment` skill, which covers the full deploy shape (launch script, port binding, build output location). Point the user there for an actual app publish.
 
 ---
 
@@ -268,10 +284,10 @@ The **project root** (from Step 1 — not the app folder if those are different 
 1. The npm package is `@dominodatalab/extensions-tools`. All imports in this project use that name.
 2. Storybook code snippets (and the `node_modules/@dominodatalab/extensions-tools/README.md`) import from `@domino/base-components` — that's a Storybook alias. Rewrite to `@dominodatalab/extensions-tools` before pasting.
 3. Component APIs come from the Storybook MCP. Don't invent props.
-4. **API calls must be document-relative.** When deployed, this app is served under `/apps-internal/<appId>/`. A root-absolute `fetch('/api/...')` bypasses the Domino proxy and 404s. Every API call must go through the `apiBase` helper:
+4. **URLs must be proxy-aware (assets and API).** When deployed, this app is served under a proxy prefix (e.g. `/preview/<appId>/`). Two things keep URLs working (see Step 8): `base: './'` in `vite.config.ts`, and an `apiBase` resolved against `document.baseURI`. Root-absolute URLs (`fetch('/api/…')`) bypass the proxy and 404.
    ```ts
-   const apiBase = window.location.pathname.replace(/[^/]*$/, '') + 'api'
-   fetch(`${apiBase}/project`)
+   const apiBase = new URL('api', document.baseURI).href
+   fetch(`${apiBase}/projects`)
    ```
 
 It should also describe the MCP lookup workflow (`list-all-documentation` → `get-documentation` → `get-documentation-for-story`), note that React 18 / react-router 5 versions are pinned for peer-dep reasons, and remind that all backend URLs route through `apiBase` (not root-absolute paths).
@@ -315,6 +331,11 @@ This catches version mismatches deterministically. If it passes, the pinning and
 
 `npm run dev` is a softer check — it'll start even with some misconfigurations. Run it if the user wants to eyeball the result, but `npm run build` is the one that gates "done".
 
+**`npm run build` does NOT catch the proxy-URL bug from Step 8** — that's a runtime/deploy failure, not a compile one. After a successful build, also confirm the URL wiring by inspecting the built `dist/index.html`:
+
+- Asset tags are **relative** (`src="./assets/…"`, `href="./assets/…"`) — not `/assets/…`. If they're root-absolute, `base: './'` is missing (Step 8a).
+- API calls use `new URL('api', document.baseURI)` (Step 8b). `grep -rn "pathname.replace" src/` should return nothing — any hit is a pathname-based URL builder to replace.
+
 Expected, not a failure: Vite will emit a warning that some chunks are larger than 500 KB. The Domino library bundles a lot — this is normal for Domino apps and doesn't need chasing.
 
 If `build` fails:
@@ -324,6 +345,12 @@ If `build` fails:
 - TypeScript errors about `erasableSyntaxOnly` or missing `composite` → leftover from a TS-6 scaffold on a downgraded TS. Recheck the Node-version branch in Step 4 (strip `erasableSyntaxOnly`, add `composite: true`).
 - Missing modules from `@dominodatalab/extensions-tools` → install didn't complete. Check `node_modules/@dominodatalab/extensions-tools/dist`.
 - TypeScript errors in the user's existing code (only relevant on retrofits) → don't try to fix them as part of this skill. Surface them to the user and let them decide.
+
+If the build is green but **assets or API calls 404 after deploy**:
+
+- **Cause:** root-absolute URLs (asset tags pointing to `/assets/…`, or `fetch('/api/…')`) bypass the proxy.
+- **Fix:** apply both parts of Step 8 — `base: './'` (8a) and `apiBase` via `document.baseURI` (8b).
+- Verify the running app is on the latest commit and was re-published — a stale publish serves the old build regardless of code changes.
 
 ---
 
