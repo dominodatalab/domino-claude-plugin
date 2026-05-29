@@ -32,10 +32,11 @@ Treat these as invariants the project must satisfy by the end. How you get there
 Ask the user, in a single turn, for:
 
 1. **Target path** — the absolute or workspace-relative path. Ask this as a plain chat question, not a multiple-choice picker, because paths are free-form.
-2. **Project name** — for `package.json`'s `name` field. If retrofitting, default to whatever the existing `package.json` says and confirm.
-3. **What to do if the path has unexpected content** — present this with `ask_user_input_v0` once you've inspected the directory (Step 2). The options depend on what you find; see Step 2.
+2. **Display name** — free-form, any string. Used in `CLAUDE.md`, UI titles, and the hand-off message. Example: `Domino Frontend`.
+3. **Package name** — the value that goes in `package.json`'s `name` field. npm requires lowercase, no spaces, no leading dot or underscore, URL-safe. Default to the kebab-case-lowercase of the display name (e.g. `Domino Frontend` → `domino-frontend`) and confirm. If retrofitting, default to whatever the existing `package.json` says and confirm.
+4. **What to do if the path has unexpected content** — present this with `ask_user_input_v0` once you've inspected the directory (Step 2). The options depend on what you find; see Step 2.
 
-If the user has already given any of these in the conversation, skip the corresponding question.
+If the user has already given any of these in the conversation, skip the corresponding question. If they give only one name, treat it as the display name and derive the package name from it — don't ask twice for the same information, just confirm the normalized package name.
 
 ---
 
@@ -87,7 +88,7 @@ You're enforcing constraints, not writing a fixed file. View the current `packag
 
 **Required `dependencies`** (add or pin to these exact versions):
 
-- `@dominodatalab/extensions-tools` — `latest` is fine for fresh projects; use a specific version if the user gave one or if one is already pinned in the existing `package.json`.
+- `@dominodatalab/extensions-tools` — `latest` is fine for fresh projects; use a specific version if the user gave one or if one is already pinned in the existing `package.json`. (See the post-install pin step at the end of this section.)
 - `react` — `18.2.0`
 - `react-dom` — `18.2.0`
 - `react-router` — `5.3.4`
@@ -100,9 +101,24 @@ You're enforcing constraints, not writing a fixed file. View the current `packag
 - `@types/react-router` — `5.1.20`
 - `@types/react-router-dom` — `^5.3.3`
 
+**Node-version branch — check this BEFORE leaving the scaffold's toolchain alone.**
+
+Run `node -v`. The current `npm create vite@latest` scaffold writes Vite 9 / TypeScript 6 / ESLint 10 / `@types/node` 24, all of which require Node ≥ 20.19. The Domino default workspace image ships Node 20.18.3, so the scaffold's defaults will fail `npm run build` (rolldown native binding error) and TS will error on `erasableSyntaxOnly` (a 5.6+ flag) and on missing `composite: true` for `tsc -b`.
+
+- **If Node ≥ 20.19:** the scaffold's defaults are fine. Skip to "Leave alone" below.
+- **If Node < 20.19:** pin the toolchain to a Node-20.18-compatible set before installing:
+  - `vite` — `^5.4.0`
+  - `@vitejs/plugin-react` — `^4.3.4`
+  - `typescript` — `~5.5.4` (or `~5.6` if you keep `erasableSyntaxOnly` — but the simpler path is to drop the flag)
+  - `@types/node` — `^20.12.0`
+  - Remove the `eslint`, `@eslint/js`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `typescript-eslint`, and `globals` entries from `devDependencies`. The Vite-9 scaffold's ESLint pins all require Node ≥ 20.19 — easier to drop them than to find a compatible set.
+  - Strip the `erasableSyntaxOnly` line from `tsconfig.app.json` and `tsconfig.node.json` (TS 5.6+ only).
+  - Add `"composite": true` to both `tsconfig.app.json` and `tsconfig.node.json` (required when `build` runs `tsc -b`).
+  - Delete `eslint.config.js` since ESLint was removed.
+
 **Leave alone:**
 
-- Vite, ESLint, TypeScript, `@vitejs/plugin-react`, and any other tooling already in the file. Whatever versions are there are fine — don't touch them unless they're causing a conflict.
+- Vite, ESLint, TypeScript, `@vitejs/plugin-react`, and any other tooling already in the file — assuming the Node-version branch above didn't tell you to touch them. Whatever versions are there are fine if they work on the user's Node.
 - Any scripts, fields, or sections you don't have a specific reason to change. In particular, don't rewrite `scripts` if the existing ones work; only add `dev`/`build`/`preview` if they're missing.
 - Any project-specific dependencies the user already has (state libraries, icon packs, data-fetching libs, etc.). The skill is additive.
 
@@ -110,6 +126,16 @@ You're enforcing constraints, not writing a fixed file. View the current `packag
 
 - If `react` or `react-dom` is at 19+, downgrade to `18.2.0`. Same for the `@types/*`.
 - If `react-router-dom` is at 6+, downgrade to `5.3.4`. Warn the user — their existing routes use v6 syntax (`<Routes>` / `element={}`) and will need to be rewritten to v5 (`<Switch>` / `component={}` or `render={}`). Don't silently rewrite their routes; tell them what needs to change.
+
+**After install — pin the resolved `@dominodatalab/extensions-tools` version.**
+
+Once Step 5 has run cleanly and `latest` was used, resolve the floating tag to a concrete version and rewrite `package.json`:
+
+```bash
+npm view @dominodatalab/extensions-tools version
+```
+
+Replace `"latest"` in `dependencies` with the exact version string this returns. Skip if a specific version was already pinned (the user explicitly chose one, or you retrofitted). This keeps future installs reproducible — `latest` drifts.
 
 ---
 
@@ -166,9 +192,31 @@ A heads-up worth passing to the user: in a standalone (non-Domino-backend) envir
 
 ---
 
-## Step 8 — Starter screen (only for fresh scaffolds)
+## Step 8 — Make API calls proxy-aware
 
-Skip this step for retrofits — don't overwrite the user's existing `App.tsx`.
+When this app runs inside Domino, it's served at `https://<host>/apps-internal/<appId>/` (or a vanity URL). Static assets work because Vite's `base: './'` (which the scaffold sets) emits relative URLs. **User-written fetch / XHR / WebSocket URLs do not get the same treatment** — a root-absolute call like `fetch('/api/project')` resolves to the bare domain, bypasses the proxy entirely, and Domino's own frontend returns 404. The failure is silent in dev (where `pathname` is `/`, so root-absolute happens to work) and only surfaces after deployment.
+
+Make every API URL document-relative. The helper:
+
+```ts
+const apiBase = window.location.pathname.replace(/[^/]*$/, '') + 'api'
+fetch(`${apiBase}/project`)
+```
+
+This preserves whatever prefix the proxy mounted the app at, and still works in local dev.
+
+**When to apply this:**
+
+- **Fresh scaffolds / starter screens you're generating:** if the starter screen calls any backend endpoint, write it through `apiBase` from the start. Include the helper in the file.
+- **Retrofits:** scan the existing code for `fetch('/`, `axios.get('/`, `new WebSocket('ws`, etc. If you find root-absolute API URLs, surface them to the user and recommend the helper. **Don't silently rewrite their fetches** — the URLs may be intentional (e.g. talking to a different host), and a wholesale rewrite is the kind of change the user needs to see.
+
+This overlaps with the `dominodatalab:app-deployment` skill, which covers the full deploy shape (manifest, port binding, build output location). Point the user there if they're heading toward an actual app publish.
+
+---
+
+## Step 9 — Starter screen (only for fresh scaffolds)
+
+Skip this step for retrofits — don't overwrite the user's existing `App.tsx` and don't touch their existing CSS.
 
 For a fresh scaffold, replace Vite's default `App.tsx` with something that exercises a few real Domino components, to prove the install works. The minimum it should demonstrate:
 
@@ -176,25 +224,62 @@ For a fresh scaffold, replace Vite's default `App.tsx` with something that exerc
 - At least one component that depends on the theme provider (e.g., `Button`, `Card`, `Typography`) — this proves Step 7 is wired correctly.
 - Optionally, `IconResolver` to demonstrate the icon system.
 
-Do not invent prop names. Use components and props you're certain about (the ones in this skill or ones the user has already shown you). If you need a component or variant you haven't seen, query the Storybook MCP first (see the `CLAUDE.md` workflow in Step 9).
+### Replace `src/index.css` (fresh scaffolds only)
+
+Vite's default `src/index.css` ships ~80 lines of template chrome: a fixed-width centered `#root`, custom color tokens, `h1`/`h2`/`p`/`code` overrides, dark-mode rules, and decorative styles for the Vite hero. All of it overrides or conflicts with `DominoThemeProviderDecorator`'s tokens. On a fresh scaffold this isn't "the user's app CSS" — it's template noise.
+
+- Overwrite `src/index.css` with a minimal reset:
+
+  ```css
+  body { margin: 0; }
+  #root { min-height: 100svh; }
+  ```
+
+- Delete `src/App.css` if `App.tsx` no longer imports it.
+
+This overrides the "don't remove existing CSS imports" line in Step 7 for the fresh-scaffold case. Step 7's guidance is about preserving real user CSS in a real codebase; it doesn't apply to Vite-template chrome on an empty scaffold. On retrofits, the Step 7 rule stands — leave existing CSS alone.
+
+### Components safe to use without an MCP query
+
+These are the components and prop shapes confirmed to work against the published `@dominodatalab/extensions-tools`. Use them for the starter screen without needing to consult the MCP. For anything beyond this set, query the Storybook MCP first (see the `CLAUDE.md` workflow in Step 10) — don't guess.
+
+| Component | Safe usage |
+|---|---|
+| `Button` | `type='primary' \| 'secondary' \| 'tertiary'`, `onClick`, children. |
+| `Card` | `title`, `extra`, `helpMessage`, `noPadding`, children. **No `size` prop.** |
+| `Row` / `Col` / `Space` | Ant-style. `Space` takes `direction`, `size`. |
+| `Tag` | `type` (**not `color`**). Values: `user-generated`, `success`, `danger`, `warning`. |
+| `Typography` | **Namespace, not a wrapper.** Render `Typography.H1` / `.H2` / `.H3` / `.Text`. Never `<Typography>…</Typography>` — it'll throw React error #130 at runtime. |
+| `Typography.Text` | Optional `type='BodyDefault' \| 'BodyDefaultStrong' \| 'BodySmall' \| 'BodySmallStrong' \| 'BodyCode'`. |
+| `DominoTable<T>` | Columns typed `DominoColumnType<T>[]`. `rowKey` is load-bearing. Pass `dataSource={[]}` (not `null`/`undefined`) for empty-state to render. |
+| `SpinnerWrapper` | Loading wrapper. |
+
+### Watch out: `node_modules` README uses the Storybook alias
+
+`node_modules/@dominodatalab/extensions-tools/README.md` (and any code snippets it embeds) imports from `@domino/base-components` — that's the Storybook-internal alias, not the published package name. Even though `node_modules` reads as authoritative, **every import in this project must use `@dominodatalab/extensions-tools`**. The `CLAUDE.md` written in Step 10 reminds future sessions of this, but the starter screen is the first place it can go wrong.
 
 ---
 
-## Step 9 — Write or update `CLAUDE.md`
+## Step 10 — Write or update `CLAUDE.md`
 
-The repo root should have a `CLAUDE.md` that tells future Claude Code sessions three things:
+The repo root should have a `CLAUDE.md` that tells future Claude Code sessions four things:
 
 1. The npm package is `@dominodatalab/extensions-tools`. All imports in this project use that name.
-2. Storybook code snippets import from `@domino/base-components` — that's a Storybook alias. Rewrite to `@dominodatalab/extensions-tools` before pasting.
+2. Storybook code snippets (and the `node_modules/@dominodatalab/extensions-tools/README.md`) import from `@domino/base-components` — that's a Storybook alias. Rewrite to `@dominodatalab/extensions-tools` before pasting.
 3. Component APIs come from the Storybook MCP. Don't invent props.
+4. **API calls must be document-relative.** When deployed, this app is served under `/apps-internal/<appId>/`. A root-absolute `fetch('/api/...')` bypasses the Domino proxy and 404s. Every API call must go through the `apiBase` helper:
+   ```ts
+   const apiBase = window.location.pathname.replace(/[^/]*$/, '') + 'api'
+   fetch(`${apiBase}/project`)
+   ```
 
-It should also describe the MCP lookup workflow (`list-all-documentation` → `get-documentation` → `get-documentation-for-story`) and note that React/router versions are pinned for peer-dep reasons.
+It should also describe the MCP lookup workflow (`list-all-documentation` → `get-documentation` → `get-documentation-for-story`), note that React 18 / react-router 5 versions are pinned for peer-dep reasons, and remind that all backend URLs route through `apiBase` (not root-absolute paths).
 
 If `CLAUDE.md` already exists, **merge** rather than overwrite — preserve whatever project-specific guidance is there, and add a Domino section. The user's existing `CLAUDE.md` may have important info about their codebase that you'd erase by replacing it.
 
 ---
 
-## Step 10 — Update `.gitignore`
+## Step 11 — Update `.gitignore`
 
 The repo root needs a `.gitignore` that excludes the things this skill (and a normal Vite + Domino workflow) generates but that shouldn't be committed. Make sure the following entries are present:
 
@@ -215,7 +300,7 @@ The repo root needs a `.gitignore` that excludes the things this skill (and a no
 
 ---
 
-## Step 11 — Verify
+## Step 12 — Verify
 
 The most reliable verification is a clean production build:
 
@@ -223,19 +308,25 @@ The most reliable verification is a clean production build:
 npm run build
 ```
 
+**`npm install` is not a sufficient check.** It can succeed while the toolchain is broken in ways that only surface at build time — most commonly the rolldown native-binding error when Vite 9 runs on Node < 20.19, which `install` happily writes to disk and only fails when `build` tries to load. Always run `npm run build` before reporting success.
+
 This catches version mismatches deterministically. If it passes, the pinning and the entry-point wiring are correct.
 
 `npm run dev` is a softer check — it'll start even with some misconfigurations. Run it if the user wants to eyeball the result, but `npm run build` is the one that gates "done".
 
+Expected, not a failure: Vite will emit a warning that some chunks are larger than 500 KB. The Domino library bundles a lot — this is normal for Domino apps and doesn't need chasing.
+
 If `build` fails:
 
+- **Rolldown native binding error** (`Cannot find module @rolldown/binding-*` or similar) → the Vite toolchain in `package.json` requires Node ≥ 20.19 but the workspace is on an older Node. Go back to Step 4's Node-version branch and apply the downgrade set.
 - JSX runtime or React typing errors → React or `@types/react` versions don't match. Recheck Step 4.
+- TypeScript errors about `erasableSyntaxOnly` or missing `composite` → leftover from a TS-6 scaffold on a downgraded TS. Recheck the Node-version branch in Step 4 (strip `erasableSyntaxOnly`, add `composite: true`).
 - Missing modules from `@dominodatalab/extensions-tools` → install didn't complete. Check `node_modules/@dominodatalab/extensions-tools/dist`.
 - TypeScript errors in the user's existing code (only relevant on retrofits) → don't try to fix them as part of this skill. Surface them to the user and let them decide.
 
 ---
 
-## Step 12 — Hand off
+## Step 13 — Hand off
 
 Tell the user:
 
@@ -243,6 +334,8 @@ Tell the user:
 - How to start the dev server.
 - That future component additions should go through the Storybook MCP (which the `CLAUDE.md` you wrote will remind the next Claude session about).
 - Anything that changed in their existing code (downgraded versions, swapped router, edited entry point) so they're not surprised.
+- **Bundle-size warning is expected.** Vite emits a `>500 KB chunk` warning on build because the Domino component library bundles a lot. It's not a failure — don't chase it.
+- **Port 8888 is reserved inside Domino workspaces.** If the user runs both a Vite dev server and a backend dev server inside a Domino workspace, port 8888 is occupied by code-server. Pick a different port for one of them.
 
 ---
 
@@ -258,5 +351,5 @@ Tell the user:
 ## What this skill is not for
 
 - Editing `@dominodatalab/extensions-tools` source. Only the published npm package is consumed; upstream changes need a release from the library repo.
-- Setting up test runners, CI, Tailwind, or other tooling on top. If the user wants those, finish the Domino bootstrap first (Step 11 green), then handle them separately — too many things can fail at once otherwise.
+- Setting up test runners, CI, Tailwind, or other tooling on top. If the user wants those, finish the Domino bootstrap first (Step 12 green), then handle them separately — too many things can fail at once otherwise.
 - Authenticating to private npm registries. If install fails on auth, ask the user; don't guess at credentials or workarounds.
