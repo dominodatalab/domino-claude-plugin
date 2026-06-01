@@ -1,6 +1,6 @@
 ---
 name: domino-ui-bootstrap
-description: Bootstrap or retrofit a Vite + React 18 + TypeScript project so it uses the Domino design system (`@dominodatalab/extensions-tools`). Use this skill whenever the user wants to create, build, scaffold, start, refactor, retrofit, or set up a React app, web app, frontend, UI, or extension that should "look like Domino", use Domino components, follow the Domino design system, or integrate with the Domino platform — even when they don't say the word "Domino" explicitly but mention Domino-flavored terms like DominoThemeProviderDecorator, extensions-tools, or base-components. Also use when the user points at an existing React/Vite project and asks to make it "Domino-styled", wire it up to the Domino component library, add Domino theming, or migrate it. The skill handles version pinning (React 18, react-router 5), MCP registration for the Storybook component reference, theme provider wiring, and a verification step — all things that are easy to get wrong otherwise.
+description: Bootstrap or retrofit a Vite + React 18 + TypeScript project so it uses the Domino design system (`@dominodatalab/extensions-tools`). Scoped to projects that are (or will be) a **fully standalone SPA frontend for a Domino application or extension** — not snippets, library additions, or work inside an existing Domino monorepo package. Use this skill whenever the user wants to create, build, scaffold, start, refactor, retrofit, or set up such an SPA — a React app, web app, frontend, UI, or extension that should "look like Domino", use Domino components, follow the Domino design system, or integrate with the Domino platform — even when they don't say the word "Domino" explicitly but mention Domino-flavored terms like DominoThemeProviderDecorator, extensions-tools, or base-components. Also use when the user points at an existing standalone React/Vite project and asks to make it "Domino-styled", wire it up to the Domino component library, add Domino theming, or migrate it. The skill handles version pinning (React 18, react-router 5), MCP registration for the Storybook component reference, theme provider wiring, and a verification step — all things that are easy to get wrong otherwise.
 ---
 
 # Domino UI Bootstrap
@@ -19,7 +19,7 @@ A handful of choices look arbitrary but aren't — they match the rest of the Do
 
 - **React 18, not 19.** `@dominodatalab/extensions-tools` peer-depends on React 18. React 19 fails at install.
 - **react-router 5, not 6.** The library uses v5 APIs (`HashRouter` from `react-router-dom@5`).
-- **HashRouter, not BrowserRouter.** This is what the library expects internally.
+- **HashRouter, not BrowserRouter.** This is what the library expects internally. It also gives cleaner isolation between the app's frontend and backend — client-side routes live entirely after the `#`, so they never collide with backend paths or the Domino proxy prefix, and inner navigation/linking works without server-side rewrite rules.
 - **The npm package name is `@dominodatalab/extensions-tools`.** Storybook code snippets show imports from `@domino/base-components` — that's a Storybook-internal alias. Rewrite every such import to `@dominodatalab/extensions-tools` before pasting into a Domino project. This is the single most common mistake.
 - **`DominoThemeProviderDecorator` wraps the whole React tree.** Without it, Domino components render unstyled or crash.
 - **URLs must survive the proxy path.** Domino serves the app under a prefix (e.g. `/preview/<appId>/`), so asset and API URLs must be document-relative — not root-absolute. Vite's default `base: '/'` emits `/assets/…` and bypasses the proxy; user-written `fetch('/api/…')` does the same. Set `base: './'` and build API URLs against `document.baseURI`. See Step 8. Invisible in local dev (`pathname` is `/`), surfaces only after deployment.
@@ -268,7 +268,6 @@ These are the components and prop shapes confirmed to work against the published
 | `Tag` | `type` (**not `color`**). Values: `user-generated`, `success`, `danger`, `warning`. |
 | `Typography` | **Namespace, not a wrapper.** Render `Typography.H1` / `.H2` / `.H3` / `.Text`. Never `<Typography>…</Typography>` — it'll throw React error #130 at runtime. |
 | `Typography.Text` | Optional `type='BodyDefault' \| 'BodyDefaultStrong' \| 'BodySmall' \| 'BodySmallStrong' \| 'BodyCode'`. |
-| `DominoTable<T>` | Columns typed `DominoColumnType<T>[]`. `rowKey` is load-bearing. Pass `dataSource={[]}` (not `null`/`undefined`) for empty-state to render. |
 | `SpinnerWrapper` | Loading wrapper. |
 
 ### Watch out: `node_modules` README uses the Storybook alias
@@ -381,3 +380,4 @@ Tell the user:
 - Editing `@dominodatalab/extensions-tools` source. Only the published npm package is consumed; upstream changes need a release from the library repo.
 - Setting up test runners, CI, Tailwind, or other tooling on top. If the user wants those, finish the Domino bootstrap first (Step 12 green), then handle them separately — too many things can fail at once otherwise.
 - Authenticating to private npm registries. If install fails on auth, ask the user; don't guess at credentials or workarounds.
+- Building anything beyond a minimal app *before* the Storybook MCP is running. If the user asks for more than a minimal application while the MCP is not yet available, only scaffold the boilerplate plus a minimal app, then instruct the user to restart Claude after finishing the app configuration so the MCP loads and the rest can be built against real component APIs.
