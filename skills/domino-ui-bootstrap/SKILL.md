@@ -363,6 +363,7 @@ Tell the user:
 - Anything that changed in their existing code (downgraded versions, swapped router, edited entry point) so they're not surprised.
 - **Bundle-size warning is expected.** Vite emits a `>500 KB chunk` warning on build because the Domino component library bundles a lot. It's not a failure — don't chase it.
 - **Port 8888 is reserved inside Domino workspaces.** If the user runs both a Vite dev server and a backend dev server inside a Domino workspace, port 8888 is occupied by code-server. Pick a different port for one of them.
+- **Next step toward a deployable app:** suggest that the user create an `app.sh` launch script that runs `npm run build` to produce the frontend bundle. Remind them that `npm run build` alone is not enough to serve the app — they'll need a backend or a static file server to actually serve the built `dist/` output. Point them at the `dominodatalab:app-deployment` skill for the full deploy shape.
 
 ---
 
