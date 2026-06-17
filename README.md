@@ -205,7 +205,7 @@ The plugin includes a vendored copy of the [Domino MCP Server](https://github.co
 
 Requires `uv` to be installed (see [Prerequisites](#prerequisites)).
 
-### Skills (18 Total)
+### Skills (19 Total)
 
 | Skill | Description |
 | --- | --- |
@@ -222,6 +222,7 @@ Requires `uv` to be installed (see [Prerequisites](#prerequisites)).
 | `domino-flows` | Flyte-based workflow orchestration |
 | `domino-distributed-computing` | Spark, Ray, Dask cluster management |
 | `domino-ai-gateway` | LLM proxy for OpenAI, Bedrock, etc. |
+| `domino-gateway-llm` | Call Gateway LLMs from code (optional extension; on explicit ask) |
 | `domino-launchers` | Parameterized web forms for self-service |
 | `domino-modeling-assistant` | MCP server for AI-assisted model development |
 | `domino-data-connectivity` | S3 Mountpoint, AWS IRSA, Azure credentials |
@@ -273,7 +274,7 @@ domino-claude-plugin/
 ├── output-styles/           # Custom output styles
 │   ├── domino-learning.md
 │   └── domino-mlops.md
-├── skills/                  # 18 skill directories
+├── skills/                  # 19 skill directories
 │   ├── workspaces/
 │   ├── jobs/
 │   ├── environments/
@@ -287,6 +288,7 @@ domino-claude-plugin/
 │   ├── flows/
 │   ├── distributed-computing/
 │   ├── ai-gateway/
+│   ├── gateway-llm/
 │   ├── launchers/
 │   ├── modeling-assistant/
 │   ├── data-connectivity/
