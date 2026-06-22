@@ -7,6 +7,10 @@ description: Deploy web applications to Domino Data Lab with expertise in React 
 
 This skill provides comprehensive knowledge for deploying web applications to Domino Data Lab, with special focus on React applications using Vite.
 
+> **Related:** This skill covers *building and configuring* the app itself — `app.sh`, ports,
+> base-path, frameworks, proxy, CI/CD. For the *platform lifecycle* of an App as a Domino object
+> — draft → preview → publish and the `/api/apps/v1` API — see the **`domino-apps-sdlc`** skill.
+
 ## Key Concepts
 
 ### Domino App Architecture
