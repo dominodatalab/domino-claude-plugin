@@ -1,9 +1,9 @@
 ---
-name: domino-app-deployment
+name: domino-apps
 description: Deploy web applications to Domino Data Lab with expertise in React apps (Vite) behind Domino's reverse proxy. Covers app.sh configuration, port configuration, base path handling for SPAs, CI/CD with GitHub Actions, and proxy troubleshooting. Use when deploying apps to Domino, setting up CI/CD pipelines, fixing broken routing, or configuring JavaScript frameworks for Domino's proxy.
 ---
 
-# Domino App Deployment Skill
+# Domino Apps Skill
 
 This skill provides comprehensive knowledge for deploying web applications to Domino Data Lab, with special focus on React applications using Vite.
 
@@ -147,6 +147,14 @@ except requests.exceptions.RequestException as err:
 ## API Reference
 
 Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+
+### API Version Prioritization Rules
+
+- **Prioritize the Apps v1 API (`/api/apps/v1`)** for all apps creation, update, preview, publication, start and stop workflows. 
+- **The Beta API (`/api/apps/beta`) is deprecated** and maintained solely for backward compatibility. Do not build new functionality against `beta` endpoints if a `v1` equivalent exists.
+- **Instance Read Operations Exception**: Instance read operations (such as fetching active container logs, `realTimeLogs`, `views`, listing active running instances, or issuing an instance-level `DELETE`) were not migrated to the `v1` spec. They remain active exclusively under the `/api/apps/beta` path. 
+
+*Rule of Thumb:* Use `v1` for automating write or publish actions. Fall back to `beta` for streaming runtime telemetry like logs or views.
 
 **Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
 
