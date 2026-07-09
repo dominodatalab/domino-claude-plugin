@@ -1,17 +1,25 @@
 ---
-name: domino-taxonomy
-description: Manage Domino taxonomies — namespaces, tags, and entity tagging — via the Taxonomy API. Covers creating, listing, updating, and deleting tags and namespaces; tagging entities (project, model, dataset, app, project_template, netapp_volume); querying entities by tag; tag autocomplete; merging tags; and importing/exporting taxonomy trees as CSV. Use when organizing projects with tags, building hierarchical namespaces, finding all entities with a given tag, bulk-tagging during onboarding, or migrating taxonomy across environments.
+name: tags-and-properties
+description: Manage Domino tags and properties via the Taxonomy API. Covers tags/namespaces (create, list, update, delete; tag entities — project, model, dataset, app, project_template, netapp_volume; query by tag; autocomplete; merge; CSV import/export) AND properties (typed metadata fields — text, number, date, boolean, url, user, organization, select, multi_select — with per-entity values, groups, and versioned entities like model_version/app_version). Use when organizing entities with tags, building hierarchical namespaces, defining typed metadata fields, setting property values on projects/models/apps, finding entities by tag, bulk-tagging during onboarding, or migrating taxonomy across environments.
 ---
 
-# Domino Taxonomy Skill
+# Domino Tags and Properties Skill
 
 ## Description
 
-This skill covers Domino's Taxonomy API for organizing entities (projects,
-models, datasets, apps, project templates, NetApp volumes) under hierarchical
-tags grouped into namespaces. It documents every public endpoint with curl
-examples that work today against a Domino cluster where the taxonomy service
-is enabled.
+This skill covers Domino's Taxonomy API, which manages two complementary
+metadata systems for organizing entities (projects, models, datasets, apps,
+project templates, NetApp volumes):
+
+- **Tags** — hierarchical labels grouped into namespaces. An entity either has
+  a tag or it doesn't.
+- **Properties** — typed metadata *fields* (`text`, `number`, `date`,
+  `select`, …), each holding a value per entity.
+
+It documents every public endpoint with curl examples that work today against
+a Domino cluster where the taxonomy service is enabled. Properties are covered
+in depth in [PROPERTIES.md](./PROPERTIES.md) (definitions) and
+[PROPERTY-VALUES.md](./PROPERTY-VALUES.md) (per-entity values).
 
 ## Activation
 
@@ -24,6 +32,11 @@ Activate this skill when the user wants to:
 - Migrate a taxonomy tree across Domino environments (CSV export/import)
 - Merge duplicate tags
 - Tune autocomplete results in a tagging UI
+- Define typed metadata fields (properties) — e.g. a `Budget` number, a
+  `Review Date`, an `Owner` user, or a `Status` single-select
+- Set, read, or clear property values on an entity (incl. versioned entities
+  like `model_version` / `app_version`)
+- Group properties or manage property definitions across a deployment
 
 ## Configuration
 
@@ -33,8 +46,8 @@ Never use `DOMINO_USER_API_KEY`.
 
 ```bash
 TOKEN=$(curl -s http://localhost:8899/access-token)
-# Taxonomy is accessible via its internal Kubernetes service — no external URL needed.
-BASE="http://taxonomy.domino-platform:80/api/taxonomy/v1"
+# Taxonomy is served through the Domino API host gateway.
+BASE="$DOMINO_API_HOST/api/taxonomy/v1"
 H="Authorization: Bearer $TOKEN"
 ```
 
@@ -42,12 +55,15 @@ H="Authorization: Bearer $TOKEN"
 
 | Concept | Description |
 |---------|-------------|
-| **Namespace** | Top-level group (e.g. `Indication`, `Analysis`). Has `label`, optional `description`, and `allowMultipleAssignments` flag. |
+| **Namespace** | Top-level group for **tags** (e.g. `Indication`, `Analysis`). Has `label`, optional `description`, and `allowMultipleAssignments` flag. |
 | **Tag** | A label inside a namespace. Can be hierarchical via `parentId` (e.g. `Clinical_Data / SDTM`). Has `label`, `namespaceId`, optional `description` and `parentId`, and `status` (`active` / `inactive`). |
-| **EntityType** | Enum over taggable entities: `dataset`, `project`, `project_template`, `model`, `app`, `netapp_volume`. |
-| **`allowMultipleAssignments`** | When `true`, an entity can hold multiple tags from the same namespace. When `false`, applying a new tag from the namespace replaces any existing one. |
+| **Property** | A typed metadata *field* — has a `label`, a `type` (`text`, `number`, `date`, `boolean`, `url`, `user`, `organization`, `user_or_org`, `select`, `multi_select`), a set of `allowedEntities`, an optional `groupName`, and (for select types) `allowedValues`. See [PROPERTIES.md](./PROPERTIES.md). |
+| **Property value** | The typed value a property holds for one specific entity, set via `PATCH /property-values`. See [PROPERTY-VALUES.md](./PROPERTY-VALUES.md). |
+| **Property group** | Free-form `groupName` string that buckets properties in the values view; ungrouped properties fall under `Miscellaneous`. |
+| **EntityType** | Enum over entities. Tags apply to `dataset`, `project`, `project_template`, `model`, `app`, `netapp_volume`. Properties additionally support the *versioned* types `model_version` and `app_version`. |
+| **`allowMultipleAssignments`** | (Tags) When `true`, an entity can hold multiple tags from the same namespace. When `false`, applying a new tag from the namespace replaces any existing one. |
 | **Taxonomy tree** | The full nested view: namespaces → root tags → child tags. Returned by `GET /taxonomy`. |
-| **Limits** | `GET /config` returns `maxDepth` (max tag nesting) and `maxLabelLength` (max characters per label). |
+| **Limits** | `GET /config` returns `maxDepth` (max tag nesting), `maxLabelLength` (max characters per label), `maxSelectAllowedValuesCount` (max options on a select property), and `maxSelectAllowedValueLength` (max length of one option). |
 
 ## Taxonomy API Reference
 
@@ -74,6 +90,10 @@ request with `Authorization: Bearer $TOKEN`.
 | `/rpc/export-to-file` | POST | Export taxonomy as CSV — see [IMPORT-EXPORT.md](./IMPORT-EXPORT.md) |
 | `/rpc/import-from-file` | POST | Import taxonomy from CSV — see [IMPORT-EXPORT.md](./IMPORT-EXPORT.md) |
 | `/rpc/validate-file` | POST | Validate a CSV before import — see [IMPORT-EXPORT.md](./IMPORT-EXPORT.md) |
+| `/properties` | GET / POST | List / create property definitions — see [PROPERTIES.md](./PROPERTIES.md) |
+| `/properties/{propertyId}` | GET / PUT / DELETE | Get / update / soft-delete a property — see [PROPERTIES.md](./PROPERTIES.md) |
+| `/property-groups` | GET | List distinct property group names — see [PROPERTIES.md](./PROPERTIES.md) |
+| `/property-values/{entityType}/{entityId}` | GET / PATCH / DELETE | Get / set-clear / delete-all property values for an entity — see [PROPERTY-VALUES.md](./PROPERTY-VALUES.md) |
 
 ## Common Workflows
 
@@ -81,7 +101,7 @@ request with `Authorization: Bearer $TOKEN`.
 
 ```bash
 TOKEN=$(curl -s http://localhost:8899/access-token)
-BASE="http://taxonomy.domino-platform:80/api/taxonomy/v1"
+BASE="$DOMINO_API_HOST/api/taxonomy/v1"
 H="Authorization: Bearer $TOKEN"
 
 # 1. Discover the tag you want to apply
@@ -268,11 +288,74 @@ Use this to render the full taxonomy in a UI in one call.
 
 ```bash
 curl -s -H "$H" "$BASE/config"
-# {"maxDepth":5,"maxLabelLength":128}
+# {"maxDepth":5,"maxLabelLength":128,"maxSelectAllowedValuesCount":100,"maxSelectAllowedValueLength":2048}
 ```
 
-Surface these limits in any UI that lets users create tags or namespaces so
-the user gets immediate validation feedback.
+| Field | Applies to |
+|-------|-----------|
+| `maxDepth` | Max tag nesting depth |
+| `maxLabelLength` | Max characters for a namespace/tag/property label (and property group name) |
+| `maxSelectAllowedValuesCount` | Max options on a `select`/`multi_select` property |
+| `maxSelectAllowedValueLength` | Max length of a single select option |
+
+Surface these limits in any UI that lets users create tags, namespaces, or
+properties so the user gets immediate validation feedback.
+
+## Properties
+
+Properties are typed metadata *fields* — a complement to tags. Where a tag is
+present-or-absent, a property holds a typed value per entity (`Budget = 50000`,
+`Review Date = 2026-01-31`, `Status = "Approved"`).
+
+Two layers:
+
+1. **Definitions** — the field schema (`label`, `type`, `allowedEntities`,
+   optional `groupName` and `allowedValues`). Managed under `/properties`;
+   create/update/delete requires the Librarian or Admin role. Full reference:
+   [PROPERTIES.md](./PROPERTIES.md).
+2. **Values** — the value a property holds for a specific entity. Managed under
+   `/property-values/{entityType}/{entityId}`; permissions are per-entity, not
+   role-based. Full reference: [PROPERTY-VALUES.md](./PROPERTY-VALUES.md).
+
+### Workflow 5 — Define a property (governance admin)
+
+```bash
+curl -s -X POST -H "$H" -H "Content-Type: application/json" \
+  -d '{
+        "label":"Review Status",
+        "groupName":"Governance",
+        "type":"select",
+        "allowedEntities":["project","model"],
+        "allowedValues":[{"value":"Draft"},{"value":"In Review"},{"value":"Approved"}]
+      }' \
+  "$BASE/properties"
+# 201 → full Property with id, status, timestamps
+```
+
+`type` is immutable after creation. `select`/`multi_select` require
+`allowedValues`; other types reject it. `project_template` is not allowed in
+`allowedEntities` — use `project` and it applies to templates too. See
+[PROPERTIES.md](./PROPERTIES.md).
+
+### Workflow 6 — Set property values on an entity (data scientist)
+
+```bash
+# See which properties apply and their current values
+curl -s -H "$H" "$BASE/property-values/project/$DOMINO_PROJECT_ID" | python3 -m json.tool
+
+# Set several at once (best-effort batch: per-item failures don't abort)
+curl -s -X PATCH -H "$H" -H "Content-Type: application/json" \
+  -d '{"items":[
+        {"propertyId":"<budget-id>","value":"50000"},
+        {"propertyId":"<review-status-id>","value":"Approved"}
+      ]}' \
+  "$BASE/property-values/project/$DOMINO_PROJECT_ID"
+```
+
+`multi_select` properties take a `values[]` array; all other types use `value`.
+An empty `value` clears the property. Versioned entities (`model_version`,
+`app_version`) require a `?version=` query param. See
+[PROPERTY-VALUES.md](./PROPERTY-VALUES.md).
 
 ## Bulk Operations and Tag Merging
 
@@ -313,9 +396,10 @@ taxonomy across Domino environments.
 The taxonomy service is not registered on the gateway you are calling. Two
 common causes:
 
-1. **Wrong base URL.** Taxonomy is served by `taxonomy.domino-platform:80`, not
-   `$DOMINO_API_HOST` (nucleus-frontend does not proxy taxonomy). Ensure `BASE`
-   is set to `http://taxonomy.domino-platform:80/api/taxonomy/v1`.
+1. **Wrong base URL.** Taxonomy is served through the Domino API host gateway.
+   Ensure `BASE` is set to `$DOMINO_API_HOST/api/taxonomy/v1` and that
+   `$DOMINO_API_HOST` is populated (it is set automatically in Domino
+   workspaces, jobs, and apps).
 2. **Taxonomy not enabled on this deployment.** Older or stripped-down
    deployments may not include the taxonomy microservice. Confirm with
    your Domino administrator before working around this.
@@ -344,14 +428,15 @@ cascade behavior across multiple IDs.
 
 Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
 
-**Taxonomy API base:** `http://taxonomy.domino-platform:80` (internal Kubernetes service, reachable from any workspace, job, or app).
+**Taxonomy API base:** `$DOMINO_API_HOST/api/taxonomy/v1` (served through the
+Domino API host gateway; `$DOMINO_API_HOST` is populated automatically in
+workspaces, jobs, and apps).
 
 Fetch the taxonomy swagger spec (requires bearer token):
 ```bash
 TOKEN=$(curl -s http://localhost:8899/access-token)
 
-# Reachable via internal Kubernetes service (works in any workspace, job, or app):
-curl -H "Authorization: Bearer $TOKEN" "http://taxonomy.domino-platform:80/api/taxonomy/swagger/doc.json"
+curl -H "Authorization: Bearer $TOKEN" "$DOMINO_API_HOST/api/taxonomy/swagger/doc.json"
 
 # Browser UI — use the external cluster URL (must be logged in):
 # https://<your-cluster>/api/taxonomy/swagger/index.html
@@ -360,5 +445,7 @@ curl -H "Authorization: Bearer $TOKEN" "http://taxonomy.domino-platform:80/api/t
 **Public docs (workflow context and field explanations):**
 - [Taxonomy API guide](https://docs.dominodatalab.com/en/cloud/api_guide/fc6b7c/taxonomy-api/)
 - [Skill Authoring Standards](../../CONTRIBUTING.md#skill-authoring-standards)
+- [PROPERTIES.md](./PROPERTIES.md) — property definitions (typed metadata fields)
+- [PROPERTY-VALUES.md](./PROPERTY-VALUES.md) — setting property values on entities
 - [BULK-OPS.md](./BULK-OPS.md) — bulk-delete + merge-tags + migration patterns
 - [IMPORT-EXPORT.md](./IMPORT-EXPORT.md) — CSV export/import for taxonomy migration
