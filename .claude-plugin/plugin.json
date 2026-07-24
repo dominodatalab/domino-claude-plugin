@@ -9,6 +9,6 @@
   "homepage": "https://github.com/dominodatalab/domino-claude-plugin",
   "repository": "https://github.com/dominodatalab/domino-claude-plugin",
   "license": "MIT",
-  "keywords": ["domino", "mlops", "data-science", "machine-learning","experiment-tracking","genai-tracing","spark","ray","dask","app-deployment"]
+  "keywords": ["domino", "mlops", "data-science", "machine-learning","experiment-tracking","genai-tracing","llm-providers","spark","ray","dask","app-deployment"]
 }
 
