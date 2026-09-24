@@ -4,13 +4,25 @@
 The Admin API covers administrative endpoints for managing users, organizations, hardware tiers, data sources, and platform configuration.
 
 ## Authentication
-```python
-import requests, os
 
-TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
-headers = {"Authorization": f"Bearer {TOKEN}"}
-base_url = os.environ["DOMINO_API_HOST"]
+https://docs.domino.ai/cloud/reference/api/domino-api-authentication
+
+Same in-run patterns as [SKILL.md](SKILL.md#authentication): prefer `DOMINO_API_PROXY` with no header (5.4.0+ with JWT credential propagation); else access-token + `DOMINO_USER_HOST`. Examples below use this setup. Member-visible vs platform-admin routes still return **403** when the starting user lacks permission.
+
+```python
+import os
+import requests
+
+if os.environ.get("DOMINO_API_PROXY"):
+    base_url = os.environ["DOMINO_API_PROXY"].rstrip("/")
+    headers = {}
+else:
+    base_url = (os.environ.get("DOMINO_USER_HOST") or os.environ.get("DOMINO_API_HOST") or "").rstrip("/")
+    token = requests.get("http://localhost:8899/access-token").text.strip()
+    headers = {"Authorization": f"Bearer {token}"}
 ```
+
+**Outside a run:** code on your laptop or in CI is not in a Domino container. Use the browser-facing deployment HTTPS URL (not localhost sidecar hosts) and `Authorization: Bearer` with a PAT (you) or service account token (automation). Details: [SKILL.md](SKILL.md#outside-a-run-laptop-ci-cron-outside-domino).
 
 ---
 
@@ -61,6 +73,10 @@ Get all users visible to the current user.
 | `offset` | int | Pagination offset |
 | `limit` | int | Results per page |
 
+**Org pseudo-users:** Each organization has an `organizationUserId` user row. `GET /api/users/v1/users` can return those rows mixed with human users and service accounts. There is **no** `listOnlyUsers` query param on that route today.
+
+`GET /v4/users` (`listUsers`) accepts `listOnlyUsers=true` to drop org pseudo-users when `/v4/users` is reachable from your run. Client-side filtering or org diff may still be needed. See https://dominodatalab.atlassian.net/browse/DOM-80329
+
 ---
 
 ### User Git Credentials
@@ -74,6 +90,25 @@ Get Git credential accessor for a user.
 ```
 PUT /api/users/v1/user/{userId}/tokenCredentials/{credentialId}
 ```
+
+---
+
+### User roles
+```
+GET /api/users/v1/user/{userId}/roles
+PUT /api/users/v1/user/{userId}/roles
+```
+
+Requires admin privileges to read or update another user's roles.
+
+---
+
+### User lifecycle (deactivation)
+
+| Surface | Route | Notes |
+|---------|-------|-------|
+| Service accounts | `POST /api/serviceAccounts/v1/serviceAccounts/{id}/deactivate` | Deactivates SA identity |
+| Human users | Admin UI / nucleus flows | No single standard REST deactivate-user path documented for automation; confirm swagger on your deployment |
 
 ---
 
@@ -125,6 +160,8 @@ GET /api/organizations/v1/organizations/all
 ```
 
 Only accessible to admin users.
+
+**Visitor JWT / apps:** Published apps often call org list because visitor JWTs lack org claims. That pattern requires the app owner to be a Domino admin and is fragile; prefer documented identity flows for new apps (see `identity_in_app_container.py` in api-improvements doc-examples).
 
 ---
 
@@ -420,7 +457,34 @@ DELETE /api/admin/v1/deploymentTargets/{targetId}/resourceConfigurations/{config
 
 ---
 
+## Central config (platform settings, not feature flags)
+
+Admin key/value settings for deployment configuration. **Not** the same system as user-facing feature flags.
+
+| Method | Path |
+|--------|------|
+| GET | `/v4/admin/centralConfigSettings` |
+| POST | `/v4/admin/centralConfigSettings` |
+| PUT | `/v4/admin/centralConfigSettings/{id}` |
+| DELETE | `/v4/admin/centralConfigSettings/{id}` |
+
+Secrets are obfuscated on read. Only three keys overlap feature flags via `SettingsToFeatureFlagConverter`; do not use central config as a bulk feature-flag export.
+
+---
+
+## Feature flags (effective per caller only)
+
+| Route | What you get |
+|-------|----------------|
+| `GET /v4/auth/principal` | Enabled feature flags **for the authenticated principal only** |
+
+There is no bulk list-all-flags-and-overrides REST surface today. Admin UI owns create/update for overrides.
+
+---
+
 ## Cost API
+
+Permissions vary by deployment; cost admin operations may require platform admin or billing roles not spelled out in every operation description. Dataset storage cost and domino-cost budgets live on additional `/v4/...` routes (`/v4/datasetrw/dataset-cost`, `/v4/domino-cost/budgets`); there is no single unified cost summary API. Verify 403 responses against your caller's admin/billing role before retrying.
 
 ### Get Cost Allocation
 ```
