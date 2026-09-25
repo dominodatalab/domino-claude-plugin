@@ -27,6 +27,7 @@ Domino apps run in containers behind a reverse proxy that:
 
 ## Related Documentation
 
+- [API-APPS.md](./API-APPS.md) - REST automation: v1 vs beta, publish chain, management vs app URL, inference split
 - [REACT-VITE-GUIDE.md](./REACT-VITE-GUIDE.md) - Deep dive into Vite + React configuration
 - [REACT-CICD.md](./REACT-CICD.md) - CI/CD setup with GitHub Actions
 - [FRAMEWORKS.md](./FRAMEWORKS.md) - Streamlit, Dash, Flask configurations
@@ -144,6 +145,12 @@ except requests.exceptions.RequestException as err:
 - **Use cases**: Model API calls, app-to-app communication, internal services
 - **Timeout**: Set appropriate timeouts for long-running requests
 
+## REST automation (apps API)
+
+For create, publish, start, and stop from code, read [API-APPS.md](./API-APPS.md). Use `/api/apps/v1` for writes; use `/api/apps/beta` only for instance logs, views, and runtime telemetry.
+
+Example chain: `doc-examples/python/app_publish_chain.py` in the api-improvements repo.
+
 ## API Reference
 
 Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
@@ -151,23 +158,23 @@ Before writing or verifying any API call, use the cluster swagger to confirm cur
 ### API Version Prioritization Rules
 
 - **Prioritize the Apps v1 API (`/api/apps/v1`)** for all apps creation, update, preview, publication, start and stop workflows. 
-- **The Beta API (`/api/apps/beta`) is deprecated** and maintained solely for backward compatibility. Do not build new functionality against `beta` endpoints if a `v1` equivalent exists.
-- **Instance Read Operations Exception**: Instance read operations (such as fetching active container logs, `realTimeLogs`, `views`, listing active running instances, or issuing an instance-level `DELETE`) were not migrated to the `v1` spec. They remain active exclusively under the `/api/apps/beta` path. 
+- **The Beta API (`/api/apps/beta`) is deprecated** for new automation and maintained for backward compatibility and runtime reads. Do not build new functionality against `beta` endpoints if a `v1` equivalent exists.
+- **Instance Read Operations Exception**: Instance read operations (such as fetching active container logs, `realTimeLogs`, `views`, listing active running instances, or issuing an instance-level `DELETE`) were not migrated to the `v1` spec. They remain under `/api/apps/beta`.
 
 *Rule of Thumb:* Use `v1` for automating write or publish actions. Fall back to `beta` for streaming runtime telemetry like logs or views.
 
-**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+**Authentication:** https://docs.domino.ai/cloud/reference/api/domino-api-authentication . In-run: `DOMINO_API_PROXY` (no Authorization header) or `DOMINO_USER_HOST` + `http://localhost:8899/access-token`. Outside run: public deployment URL + PAT/SA. Do not use API keys.
+
+**Get the cluster base URL:** `$DOMINO_USER_HOST` or `$DOMINO_API_HOST` in-run; confirm apps routes with `GET .../api/apps/v1/apps?limit=1`.
 
 Fetch the swagger spec:
 ```bash
-# No authentication required for the public API spec
-curl "$DOMINO_API_HOST/assets/public-api.json"
-# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
+curl ${TOKEN:+-H "Authorization: Bearer $TOKEN"} "$DOMINO_API_HOST/assets/public-api.json"
 ```
 
-**Public docs (workflow context and field explanations):**
-- [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
-- [Apps in Domino](https://docs.dominodatalab.com/en/latest/user_guide/e3ec27/apps-in-domino/)
+**Public docs:**
+- https://docs.domino.ai/cloud/platform-capabilities/features/apps
+- https://docs.domino.ai/cloud/reference/api/domino-open-api
 
 **Blueprint Reference:**
 - [React CI/CD Blueprint](https://github.com/dominodatalab/domino-blueprints/tree/main/React-app-deployment-with-CICD)

@@ -26,6 +26,8 @@ Train Model → Register → Deploy Endpoint → Monitor → Update Version
 
 ## Related Documentation
 
+- [domino-model-serving/SKILL.md](../domino-model-serving/SKILL.md) - REST deploy, registry v1/v2, lifecycle pitfalls
+- [API-MODEL-SERVING.md](../python-sdk/API-MODEL-SERVING.md) - modelServing routes and invoke split
 - [DEPLOY-ENDPOINT.md](./DEPLOY-ENDPOINT.md) - Creating model APIs
 - [MONITORING.md](./MONITORING.md) - Grafana, metrics, alerts
 - [SCALING.md](./SCALING.md) - GPU inference, Triton, scaling
