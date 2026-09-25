@@ -3,13 +3,31 @@
 ## Overview
 The Jobs API allows you to start, monitor, and manage batch job executions in Domino.
 
-## Authentication
-```python
-import requests, os
+**Command field names differ by route** (verified in cluster swagger):
 
-TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
-headers = {"Authorization": f"Bearer {TOKEN}"}
-base_url = os.environ["DOMINO_API_HOST"]
+| Route | Body field | Notes |
+|-------|------------|-------|
+| `POST /api/jobs/v1/jobs` (public catalog, `NewJobV1`) | `runCommand` | One-off job start |
+| `POST /v4/projects/{projectId}/scheduledjobs` (`NewScheduledJobDto`) | `command` | Scheduled job create |
+| `POST /v4/jobs/{projectId}/resolveJobDefaults` | `commandToRun` | Prefetch defaults before scheduled-job create |
+
+Match the body schema for the exact path in cluster swagger.
+
+## Authentication
+
+See [SKILL.md](SKILL.md#authentication).
+
+```python
+import os
+import requests
+
+if os.environ.get("DOMINO_API_PROXY"):
+    base_url = os.environ["DOMINO_API_PROXY"].rstrip("/")
+    headers = {}
+else:
+    base_url = (os.environ.get("DOMINO_USER_HOST") or os.environ.get("DOMINO_API_HOST") or "").rstrip("/")
+    token = requests.get("http://localhost:8899/access-token").text.strip()
+    headers = {"Authorization": f"Bearer {token}"}
 ```
 
 ---
@@ -144,7 +162,7 @@ Start a new job execution.
 ```json
 {
   "projectId": "project-123",
-  "commandToRun": "python train.py --epochs 100",
+  "runCommand": "python train.py --epochs 100",
   "hardwareTierId": "gpu-small",
   "environmentId": "env-789",
   "commitId": "abc123",
@@ -157,7 +175,7 @@ Start a new job execution.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `projectId` | string | Yes | Project to run in |
-| `commandToRun` | string | Yes | Command to execute |
+| `runCommand` | string | Yes | Command to execute |
 | `hardwareTierId` | string | Yes | Hardware tier ID or name |
 | `environmentId` | string | No | Environment ID |
 | `commitId` | string | No | Git commit to use |
@@ -170,7 +188,7 @@ response = requests.post(
     headers=headers,
     json={
         "projectId": "project-123",
-        "commandToRun": "python train.py --epochs 100 --lr 0.001",
+        "runCommand": "python train.py --epochs 100 --lr 0.001",
         "hardwareTierId": "gpu-small",
         "environmentId": "env-789",
         "title": "Hyperparameter Experiment"

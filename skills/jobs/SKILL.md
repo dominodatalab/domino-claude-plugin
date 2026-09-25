@@ -139,6 +139,9 @@ bash pipeline.sh
 | First of month | `0 0 0 1 * ?` |
 
 ### Cron Expression Format
+
+Domino scheduled jobs use **Quartz** cron (six required fields, optional seventh year field; seconds first). This is not Unix five-field crontab. Use `?` in day-of-month or day-of-week when the other field is set. Field rules and special characters (`*`, `-`, `/`, `L`, `W`, `#`): [Quartz CronTrigger tutorial](https://www.quartz-scheduler.org/documentation/quartz-2.5.x/tutorials/crontrigger.html).
+
 ```
 ┌───────────── second (0-59)
 │ ┌───────────── minute (0-59)

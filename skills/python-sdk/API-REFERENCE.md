@@ -4,27 +4,45 @@ Complete reference for Domino Platform REST API endpoints.
 
 ## Authentication
 
-All API calls require authentication. Inside Domino (workspace, job, app, model), use the local access-token endpoint:
+Full detail: [SKILL.md](SKILL.md#authentication) and https://docs.domino.ai/cloud/reference/api/domino-api-authentication
+
+**In-run, preferred (5.4.0+ with JWT credential propagation):**
 
 ```bash
-# Bash
-TOKEN=$(curl -s http://localhost:8899/access-token)
-curl -H "Authorization: Bearer $TOKEN" \
-  "$DOMINO_API_HOST/api/projects/v1/projects/{projectId}"
+curl "$DOMINO_API_PROXY/v4/users/self"
 ```
+
+**In-run, when proxy unset (access-token + platform host):**
 
 ```python
-# Python
-import requests, os
-TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
-headers = {"Authorization": f"Bearer {TOKEN}"}
-response = requests.get(url, headers=headers)
+import os
+import requests
+
+base_url = (os.environ.get("DOMINO_USER_HOST") or os.environ.get("DOMINO_API_HOST") or "").rstrip("/")
+token = requests.get("http://localhost:8899/access-token").text.strip()
+headers = {"Authorization": f"Bearer {token}"}
 ```
 
+**Combined setup for examples in this file:**
+
+```python
+import os
+import requests
+
+if os.environ.get("DOMINO_API_PROXY"):
+    base_url = os.environ["DOMINO_API_PROXY"].rstrip("/")
+    headers = {}
+else:
+    base_url = (os.environ.get("DOMINO_USER_HOST") or os.environ.get("DOMINO_API_HOST") or "").rstrip("/")
+    token = requests.get("http://localhost:8899/access-token").text.strip()
+    headers = {"Authorization": f"Bearer {token}"}
+```
+
+**Outside a run:** not in a Domino container — use the deployment HTTPS URL and Bearer PAT or service account token (see [SKILL.md](SKILL.md#outside-a-run-laptop-ci-cron-outside-domino)).
+
 ## Base URL
-```
-https://your-domino-instance.com
-```
+
+In-run: `DOMINO_API_PROXY` for platform `/v4/…` and `/api/…` routes. OpenAPI: `$DOMINO_API_PROXY/assets/public-api.json`.
 
 ---
 
@@ -746,6 +764,7 @@ GET /api/audittrail/v1/auditevents
 |------|-------------|
 | 200 | Success |
 | 201 | Created |
+| 202 | Accepted (async work started; see Async responses below) |
 | 204 | No Content |
 | 400 | Bad Request |
 | 401 | Unauthorized |
@@ -754,9 +773,48 @@ GET /api/audittrail/v1/auditevents
 | 409 | Conflict |
 | 500 | Internal Server Error |
 
+## Error response body
+
+Many platform routes return a structured error envelope (Domino API Standard):
+
+```json
+{
+  "message": "Human-readable summary",
+  "errors": [
+    {
+      "code": "MachineReadableCode",
+      "message": "Detail",
+      "details": {}
+    }
+  ]
+}
+```
+
+Prefer branching on `errors[].code` when present. A bare 500 with no structured body may be a backend bug or scale failure; do not assume retry will help.
+
+## Async responses
+
+Standard pattern: `202 Accepted` plus a `Location` header for poll URL. Domino job start often returns `200`/`201` with a job or run id in the JSON body instead. Read the response body for an id before looking for `Location`.
+
+Long-running operations (policy compute, some deployment stops) need polling a status field; do not treat HTTP 200 alone as completion.
+
+## Deprecation headers
+
+Check `Deprecation` and `Sunset` response headers on routes you automate. Confirm paths and fields against cluster swagger; product docs may lag the deployment you are on.
+
 ## Pagination
 
-Most list endpoints support pagination:
+Most list endpoints expose `offset`, `limit`, and `totalCount` with a `data` array (or an envelope alias such as `modelProducts`).
+
+Gotchas agents hit in production:
+
+| Issue | Where | Mitigation |
+|-------|-------|------------|
+| Hard cap near 100 rows | Dataset list v2, some project lists | Page with offset; re-filter client-side if server ignores filters |
+| `totalCount` unreliable | Some list endpoints with broken offset | Stop when a page returns fewer than `limit` rows |
+| Server ignores query filters | Dataset v2 `projectIdsToInclude` | Filter client-side after fetch |
+| Mixed envelope keys | `data` vs domain-specific keys | Normalize with a small list extractor |
+
 ```json
 {
   "offset": 0,
@@ -766,19 +824,21 @@ Most list endpoints support pagination:
 }
 ```
 
+## Path conventions
+
+| Prefix | When to use |
+|--------|-------------|
+| `/api/...` | Newer versioned routes (projects beta/v1, jobs v1, users v1, etc.) when swagger lists them for your workflow |
+| `/v4/...` | Older or project-scoped routes (settings, scheduled jobs, git attach) still used in automation |
+
+Field names are **not** interchangeable across routes. Example: `POST /api/jobs/v1/jobs` uses `runCommand`; `POST /v4/projects/{projectId}/scheduledjobs` uses `command`; `POST /v4/jobs/{projectId}/resolveJobDefaults` uses `commandToRun`. Confirm in swagger for the exact path you call.
+
 ## Documentation Reference
 
-Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+Before writing or verifying any API call, use cluster swagger for paths and field names. Use https://docs.domino.ai for workflow context.
 
-**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+**OpenAPI JSON in-run:** `curl "$DOMINO_API_PROXY/assets/public-api.json"`
 
-Fetch the swagger spec:
-```bash
-# No authentication required for the public API spec
-curl "$DOMINO_API_HOST/assets/public-api.json"
-# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
-```
-
-**Public docs (workflow context and field explanations):**
-- [REST API Reference](https://docs.dominodatalab.com/en/latest/api_guide/8c929e/domino-platform-api-reference/)
-- [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
+**Product docs:**
+- [Domino API authentication](https://docs.domino.ai/cloud/reference/api/domino-api-authentication)
+- [API discovery](https://docs.domino.ai/llms.txt)

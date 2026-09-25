@@ -46,44 +46,90 @@ RUN pip install dominodatalab
 
 ## Authentication
 
-### Preferred: Access Token (inside Domino)
+Canonical guide: https://docs.domino.ai/cloud/reference/api/domino-api-authentication
 
-When running inside Domino (workspace, job, app, model), fetch a short-lived bearer token from the local sidecar:
+**Do not use API keys** (`X-Domino-Api-Key`, `DOMINO_USER_API_KEY`, `api_key=`). Use PAT or service account tokens only when calling from **outside** a run.
+
+### In-run (workspace, job, app backend)
+
+Domino injects `DOMINO_USER_HOST` / `DOMINO_API_HOST` (same base; prefer `DOMINO_USER_HOST`) and, when JWT credential propagation is enabled, `DOMINO_API_PROXY` (typically `http://localhost:8899`).
+
+| Pattern | When | Code |
+|---------|------|------|
+| **API proxy (preferred)** | `DOMINO_API_PROXY` is set (Domino **5.4.0+** in runs with JWT credential propagation configured) | Call `{DOMINO_API_PROXY}{path}` with **no** `Authorization` header. The JWT sidecar adds the **starting user** access JWT on the forwarded request. |
+| **Access token + platform host** | Older deployments, or you intentionally call `DOMINO_USER_HOST` / `DOMINO_API_HOST` instead of the proxy URL | Fetch a short-lived JWT, then Bearer on the platform base. |
+
+**API proxy (preferred on 5.4.0+):**
 
 ```python
-import requests, os
+import os
+import requests
 
-TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
-BASE = os.environ["DOMINO_API_HOST"]
-headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+base_url = os.environ["DOMINO_API_PROXY"].rstrip("/")
+headers = {}
+
+response = requests.get(f"{base_url}/v4/users/self")
 ```
 
-Use `headers` on all `requests` calls. Prefer this over the SDK for new code — see [REST API](#rest-api) section below.
+```bash
+curl "$DOMINO_API_PROXY/v4/users/self"
+```
 
-### SDK Authentication (deprecated pattern)
+The proxy is not guaranteed on every deployment or run type. If `DOMINO_API_PROXY` is missing, use the access-token pattern or PAT from outside the cluster.
 
-> **Note:** `DOMINO_USER_API_KEY` and the `api_key=` parameter are deprecated and will be removed in a future Domino release. Use the access-token endpoint above for new code. The SDK options below are documented for reference only.
+**Access token + `DOMINO_USER_HOST` (legacy-friendly in-run):** use the [In-run setup block](#in-run-setup-block-for-examples-in-this-skill) below; it covers both proxy and access-token paths.
+
+**Before Domino 5.4.0:** JWT file propagation (`DOMINO_TOKEN_FILE`) was used before the API proxy; legacy behavior may still exist if admins enable `EnableLegacyJwtTooling`. Prefer migrating to the proxy pattern on supported versions.
+
+### Outside a run (laptop, CI, cron outside Domino)
+
+Your code is **not** executing inside a Domino workspace, job, or app container. Domino does **not** inject `DOMINO_API_PROXY`, `DOMINO_USER_HOST`, or an access-token sidecar. You must supply both:
+
+1. **Base URL** — the deployment URL users open in the browser (HTTPS), for example `https://yourcompany.engineering.domino.tech`. Not `http://127.0.0.1:8763` and not values copied from an in-run environment.
+2. **Credential** — `Authorization: Bearer` with a token you store securely (secret manager, CI variable, not committed to git):
+   - **Personal Access Token (PAT)** when the automation acts as you. Create under Account settings or `POST /api/pat/v1/tokens` while already authenticated.
+   - **Service account token** when a pipeline or integration runs without a human user. An admin provisions the service account and token.
+
+```python
+import requests
+
+deployment_url = "https://yourcompany.engineering.domino.tech"
+pat = "..."  # from your secret store; never hardcode in shared repos
+
+response = requests.get(
+    f"{deployment_url.rstrip('/')}/v4/users/self",
+    headers={"Authorization": f"Bearer {pat}"},
+)
+```
+
+See https://docs.domino.ai/cloud/reference/api/domino-api-authentication .
+
+### In-run setup block (for examples in this skill)
+
+Use inside a workspace, job, or app only:
+
+```python
+import os
+import requests
+
+if os.environ.get("DOMINO_API_PROXY"):
+    base_url = os.environ["DOMINO_API_PROXY"].rstrip("/")
+    headers = {}
+else:
+    base_url = (os.environ.get("DOMINO_USER_HOST") or os.environ.get("DOMINO_API_HOST") or "").rstrip("/")
+    token = requests.get("http://localhost:8899/access-token").text.strip()
+    headers = {"Authorization": f"Bearer {token}"}
+```
+
+### python-domino inside Domino
 
 ```python
 from domino import Domino
 
-# Option 1: Pass credentials directly (deprecated)
-domino = Domino(
-    host="https://your-domino.com",
-    api_key="your-api-key",
-    project="owner/project-name"
-)
-
-# Option 2: Environment variables (deprecated)
-import os
-os.environ["DOMINO_API_HOST"] = "https://your-domino.com"
-os.environ["DOMINO_USER_API_KEY"] = "your-api-key"
-
-domino = Domino("owner/project-name")
-
-# Option 3: Inside Domino (auto-configured via injected env vars)
 domino = Domino("owner/project-name")
 ```
+
+Configure the SDK with host + Bearer token per the product auth page. Never pass `api_key=`.
 
 ## Common Operations
 
@@ -227,28 +273,13 @@ model_info = domino.model_get("model-id")
 
 ## REST API
 
-### Direct API Calls
+Prefer `/api/...` when swagger documents that path for your operation. Use `/v4/...` when that is what your cluster swagger shows (many project settings and scheduled-job flows).
+
+Use the [Authentication](#authentication) setup (`base_url`, `headers`) for examples below.
+
 ```python
-import requests, os
-
-TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
-BASE = os.environ["DOMINO_API_HOST"]
-headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
-
-# Get projects
-response = requests.get(f"{BASE}/v4/projects", headers=headers)
+response = requests.get(f"{base_url}/api/projects/beta/projects", headers=headers or None)
 projects = response.json()
-
-# Start a run
-response = requests.post(
-    f"{BASE}/v4/projects/{project_id}/runs",
-    headers=headers,
-    json={
-        "command": "python train.py",
-        "hardwareTierId": "tier-id"
-    }
-)
-run = response.json()
 ```
 
 ### Common Endpoints
@@ -388,14 +419,8 @@ except Exception as e:
 
 ## Best Practices
 
-### 1. Use the Access Token Endpoint
-```python
-import requests, os
-
-# Fetch a short-lived token from the local sidecar (inside Domino)
-TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
-BASE = os.environ["DOMINO_API_HOST"]
-```
+### 1. Follow [Authentication](#authentication)
+Proxy without a header when `DOMINO_API_PROXY` is set; otherwise access-token + platform host; PAT/SA only outside a run.
 
 ### 2. Handle Rate Limits
 ```python
@@ -445,19 +470,12 @@ For comprehensive REST API documentation, see these specialized guides:
 
 ## Documentation Reference
 
-Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+Before writing or verifying any API call, use cluster swagger for paths and field names. Use https://docs.domino.ai for workflow context.
 
-**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
+**OpenAPI JSON in-run:** `curl "$DOMINO_API_PROXY/assets/public-api.json"`
 
-Fetch the swagger spec:
-```bash
-# No authentication required for the public API spec
-curl "$DOMINO_API_HOST/assets/public-api.json"
-# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
-```
-
-**Public docs (workflow context and field explanations):**
-- [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
-- [REST API Reference](https://docs.dominodatalab.com/en/latest/api_guide/8c929e/domino-platform-api-reference/)
-- [python-domino Library](https://docs.dominodatalab.com/en/latest/api_guide/c5ef26/the-python-domino-library/)
+**Product docs:**
+- [Domino API authentication](https://docs.domino.ai/cloud/reference/api/domino-api-authentication)
+- [API discovery for agents](https://docs.domino.ai/llms.txt)
+- [python-domino Library](https://docs.domino.ai/cloud/reference/python-sdk/python-wrapper-for-domino-api)
 - [GitHub Repository](https://github.com/dominodatalab/python-domino)
