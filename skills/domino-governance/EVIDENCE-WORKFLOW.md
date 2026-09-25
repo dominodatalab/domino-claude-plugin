@@ -4,10 +4,30 @@ This document explains how to attach evidence, answer policy questions, and crea
 
 ## Setup
 
+Authentication: https://docs.domino.ai/cloud/reference/api/domino-api-authentication . **Do not use API keys**.
+
+Use the first base where `GET $BASE/policy-overviews` returns HTTP 200. Try proxy (no header), then in-run gateway + access-token, then public URL + PAT on 404. Details: [SKILL.md Configuration](./SKILL.md#configuration).
+
 ```bash
-TOKEN=$(curl -s http://localhost:8899/access-token)
-BASE="${DOMINO_GOVERNANCE_HOST:-$DOMINO_API_HOST}/api/governance/v1"
+GOV="/api/governance/v1"
+
+# 1) Proxy in-run — no Authorization; fails with 404 if governance not on this route
+BASE="$DOMINO_API_PROXY$GOV"
+TOKEN=""
+
+# 2) In-run gateway — not the same as public URL
+# HOST="${DOMINO_USER_HOST:-$DOMINO_API_HOST}"
+# TOKEN="$(curl -s http://localhost:8899/access-token)"
+# BASE="$HOST$GOV"
+
+# 3) Public deployment — outside run, or 404 on 1 and 2
+# BASE="https://your-deployment.domino.tech$GOV"
+# TOKEN="$PAT_OR_SA_TOKEN"
 ```
+
+Curl examples use `${TOKEN:+-H "Authorization: Bearer $TOKEN"}`. Leave `TOKEN` empty only on step 1 when it succeeds.
+
+Attachments may be inline on `POST /bundles` or added via `POST /bundles/{bundleId}/attachments`. Use the attachment endpoint when adding evidence after create.
 
 ## Attachment Types
 
@@ -21,7 +41,7 @@ Attaches a registered model version from the Domino Model Registry.
 
 ```bash
 curl -X POST "$BASE/bundles/$BUNDLE_ID/attachments" \
-  -H "Authorization: Bearer $TOKEN" \
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"} \
   -H "Content-Type: application/json" \
   -d '{
     "type": "ModelVersion",
@@ -42,7 +62,7 @@ Attaches a file from the project repository (git or DFS).
 ```bash
 # For git-based projects:
 curl -X POST "$BASE/bundles/$BUNDLE_ID/attachments" \
-  -H "Authorization: Bearer $TOKEN" \
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"} \
   -H "Content-Type: application/json" \
   -d '{
     "type": "Report",
@@ -70,6 +90,8 @@ The only valid types are:
 
 The `identifier` field must be a **JSON object**, not a flat string. Types like "File" or "ExternalLink" are not supported by the API.
 
+**`ModelVersion` identifier:** `name` is the **MLflow registered model name**, not a Domino UUID or model API id. `version` is an integer.
+
 ---
 
 ## Answering Evidence Questions (EvidenceSet)
@@ -82,7 +104,7 @@ Policies define evidence questions via `evidenceSet` items in the YAML. These ap
 
 ```bash
 curl -s "$BASE/policies/$POLICY_ID" \
-  -H "Authorization: Bearer $TOKEN"
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"}
 ```
 
 The response structure is:
@@ -103,7 +125,7 @@ Use the `submit-result-to-policy` RPC endpoint:
 
 ```bash
 curl -X POST "$BASE/rpc/submit-result-to-policy" \
-  -H "Authorization: Bearer $TOKEN" \
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"} \
   -H "Content-Type: application/json" \
   -d '{
     "bundleId": "bundle-uuid",
@@ -154,19 +176,22 @@ Findings document issues discovered during review.
 
 ```bash
 curl -X POST "$BASE/findings" \
-  -H "Authorization: Bearer $TOKEN" \
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"} \
   -H "Content-Type: application/json" \
   -d '{
     "bundleId": "bundle-uuid",
     "policyVersionId": "policy-version-uuid",
     "name": "Finding title",
-    "title": "Finding title",
     "description": "Detailed description of the issue...",
     "severity": "High",
     "approver": {"id": "org-or-user-uuid", "name": "org-name"},
     "assignee": {"id": "user-uuid", "name": "username"}
   }'
 ```
+
+Required on create: `approver`, `assignee`, `bundleId`, `name`, `policyVersionId`, `severity`. Optional: `description`, `dueDate`, `evidenceId`, `artifactId`.
+
+Update (including close) with **PUT** `/findings/{id}` and `"status": "Done"` or `"WontDo"`.
 
 Get the `policyVersionId` from the bundle response (`GET /bundles/{bundleId}`). Get user/org IDs from the `stageApprovals` section of the bundle response.
 
@@ -185,8 +210,7 @@ Get the `policyVersionId` from the bundle response (`GET /bundles/{bundleId}`). 
 
 ```bash
 # Attach multiple project files in one go
-TOKEN=$(curl -s http://localhost:8899/access-token)
-BASE="${DOMINO_GOVERNANCE_HOST:-$DOMINO_API_HOST}/api/governance/v1"
+# Set BASE and TOKEN per SKILL.md Configuration (steps 1–3)
 BUNDLE="your-bundle-id"
 COMMIT=$(git rev-parse HEAD)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -194,7 +218,7 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 for file in "notebooks/01_eda.ipynb" "notebooks/02_train.ipynb" "notebooks/03_validate.ipynb"; do
   name=$(basename "$file")
   curl -s -X POST "$BASE/bundles/$BUNDLE/attachments" \
-    -H "Authorization: Bearer $TOKEN" \
+    ${TOKEN:+-H "Authorization: Bearer $TOKEN"} \
     -H "Content-Type: application/json" \
     -d "{
       \"type\": \"Report\",
