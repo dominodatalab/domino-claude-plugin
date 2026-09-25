@@ -1,5 +1,7 @@
 # Domino Apps API
 
+Agent-oriented v1 vs beta and publish chain: [apps/API-APPS.md](../apps/API-APPS.md). This file is a beta-heavy endpoint catalog; prefer v1 routes from that doc for new automation.
+
 ## Overview
 The Apps API allows you to create, manage, and deploy web applications in Domino.
 
