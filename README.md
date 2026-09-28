@@ -60,7 +60,6 @@ cat > ~/.claude/marketplaces/domino/.claude-plugin/marketplace.json << 'EOF'
     {
       "name": "domino-claude-plugin",
       "description": "Domino Data Lab plugin for Claude Code - workspaces, jobs, environments, datasets, apps, models, and more",
-      "version": "1.0.0",
       "source": "./plugins/domino-claude-plugin",
       "category": "development"
     }
@@ -102,22 +101,15 @@ Navigate to the **Installed** tab to confirm `domino-claude-plugin` is listed.
 Use the `--plugin-dir` flag to load the plugin directly. This is ideal for development, testing, or quick evaluation.
 
 ```bash
-# Clone the plugin
+# Clone the plugin (the manifest .claude-plugin/plugin.json is part of the repo; do not overwrite it)
 git clone https://github.com/dominodatalab/domino-claude-plugin.git
 
-# Ensure the plugin manifest exists
-mkdir -p domino-claude-plugin/.claude-plugin
-cat > domino-claude-plugin/.claude-plugin/plugin.json << 'EOF'
-{
-  "name": "domino-claude-plugin",
-  "description": "Domino Data Lab plugin for Claude Code",
-  "version": "1.0.0"
-}
-EOF
-
-# Run Claude Code with the plugin
+# Run Claude Code with the plugin loaded in place
 claude --plugin-dir ./domino-claude-plugin
 ```
+
+Loaded this way the plugin is read in place: a `git pull` (or checking out a `release-*` branch
+or tag) takes effect at the next session with no reinstall.
 
 To make this persistent without the marketplace approach, add a shell alias:
 
@@ -125,6 +117,16 @@ To make this persistent without the marketplace approach, add a shell alias:
 echo 'alias claude="claude --plugin-dir /path/to/domino-claude-plugin"' >> ~/.bashrc
 source ~/.bashrc
 ```
+
+### Versions and updates
+
+The plugin version is `YYYY.X.Y.N` (for example `2026.6.3.1`): the release year, the Domino
+line the content is correct for as a floor (`6.3` = Domino 6.3 and later, including Cloud), and
+a release counter. Each release is tagged `release-YYYY.X.Y.N`. Marketplace installs (Option 1
+and the Anthropic marketplace) are cached by that version string and update only when it
+changes; check what you have with `claude plugin list` and update with
+`claude plugin update <name>@<marketplace>`. See CONTRIBUTING.md "Release branches, tags and
+backports" for the branch and tag policy.
 
 ---
 
@@ -184,14 +186,22 @@ After installation, test that the plugin is working:
 
 ## Updating the Plugin
 
-If installed via the marketplace approach, navigate to the plugin source and pull updates:
+How you update depends on how you installed:
 
-```bash
-cd ~/.claude/marketplaces/domino/plugins/domino-claude-plugin
-git pull
-```
+- **Marketplace install (Option 1, Option 3, or the Anthropic marketplace):** Claude Code keeps a
+  cached copy keyed by the plugin version. Pulling the source directory does **not** change what
+  Claude loads. Run the update command and restart:
 
-Then restart Claude Code. If installed via `--plugin-dir`, pull updates in the cloned directory.
+  ```bash
+  claude plugin update domino-claude-plugin@domino-marketplace   # local marketplace (Option 1 / DSE)
+  claude plugin update dominodatalab@claude-plugins-official      # Anthropic marketplace
+  ```
+
+  If it reports "already at the latest version", the published version has not changed yet
+  (see "Versions and updates" above).
+
+- **`--plugin-dir` (Option 2):** the plugin is read in place. `git pull` in the clone, or check
+  out a `release-*` branch or tag, then start a new session.
 
 ---
 

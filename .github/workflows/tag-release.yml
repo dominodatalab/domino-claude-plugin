@@ -1,0 +1,62 @@
+name: Tag release
+
+# On every push to main or a release-X.Y branch, create the tag
+#   release-<plugin.json version>        e.g. release-2026.6.3.1
+# if it does not exist yet. The tag is derived from the manifest, so tag and manifest
+# always agree. Branch names stay release-X.Y because the Domino DSE update script
+# resolves them by exact name; tags are the per-release labels an admin can pin to.
+
+on:
+  push:
+    branches: ["main", "release-*"]
+    paths:
+      - ".claude-plugin/plugin.json"
+      - "skills/**"
+      - "commands/**"
+      - "agents/**"
+      - "templates/**"
+      - "mcp-servers/**"
+      - "output-styles/**"
+      - ".mcp.json"
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Read version
+        id: v
+        run: |
+          v="$(jq -r '.version // empty' .claude-plugin/plugin.json)"
+          [ -n "$v" ] || { echo "::error::plugin.json has no version"; exit 1; }
+          [[ "$v" =~ ^[0-9]{4}\.([0-9]+\.[0-9]+)\.[0-9]+$ ]] || { echo "::error::version '$v' is not YYYY.X.Y.N"; exit 1; }
+          line="${BASH_REMATCH[1]}"
+          if [[ "$GITHUB_REF_NAME" =~ ^release-([0-9]+\.[0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" != "$line" ]; then
+            echo "::error::branch $GITHUB_REF_NAME carries version $v; its X.Y must be ${BASH_REMATCH[1]}"; exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "tag=release-$v" >> "$GITHUB_OUTPUT"
+      - name: Create tag if absent
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          git fetch origin "+refs/tags/*:refs/tags/*"
+          if git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+            existing="$(git rev-list -n1 "$TAG")"
+            if [ "$existing" = "$GITHUB_SHA" ]; then
+              echo "$TAG already points at $GITHUB_SHA; nothing to do"; exit 0
+            fi
+            echo "::error::$TAG already exists at $existing but this push is $GITHUB_SHA. Two changes landed with the same version. Recover with a bump-only PR to the next N; do not move or delete the existing tag. See CONTRIBUTING.md 'Release branches, tags and backports'."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "domino-claude-plugin $VERSION (${GITHUB_REF_NAME})" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+          echo "created $TAG at $GITHUB_SHA"
