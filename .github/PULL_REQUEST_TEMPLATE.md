@@ -62,7 +62,7 @@ N/A
 
 Content accuracy:
 
-- [ ] Every REST path exists in the public spec for the targets claimed above. Routes not in the spec (for example `/v4/*`) are either removed or labelled **undocumented, unsupported, may change without notice** at the point of use.
+- [ ] Every REST path exists in the public spec for the targets claimed above. `/v4/*` routes belong to the Domino Internal API (documented per cluster under `https://<domain>/docs`, not in the Public API): each is either replaced by its `/api/...` equivalent or labelled **internal API, may change between Domino versions** at the point of use.
 - [ ] Every `python-domino` method cited exists in [`domino/domino.py`](https://github.com/dominodatalab/python-domino/blob/master/domino/domino.py) on `master`.
 - [ ] Every configuration format shown (YAML, JSON, Dockerfile) is one Domino actually accepts, with a docs.domino.ai citation.
 - [ ] Authentication follows CONTRIBUTING.md standard 1: `DOMINO_API_PROXY` or the `localhost:8899` access-token endpoint in a run; Personal Access Token or service account outside a run; legacy user API keys described as deprecated, never recommended.

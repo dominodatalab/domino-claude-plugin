@@ -233,11 +233,19 @@ correct for both. Every `SKILL.md`:
   older than 6.3, say the skill targets 6.3 and later and point to
   `docs.dominodatalab.com` for that version.
 
-Verify cited API routes against **both** specs:
+Verify cited API routes against **both** published specs:
 `https://docs.domino.ai/api-specs/6.3/public-api.json` and
-`https://docs.domino.ai/api-specs/cloud/public-api.json`. Routes that appear in neither
-(all `/v4/*` routes, for instance) are undocumented and unsupported. Either replace them
-with the `/api/...` equivalent or label them as undocumented at the point of use. The
+`https://docs.domino.ai/api-specs/cloud/public-api.json`. Every Domino deployment from 6.3
+also serves its own cluster-specific API reference at `https://<domino-domain>/docs`
+(Scalar, unauthenticated), with one OpenAPI document per service under
+`/docs/openapi/`: `openapi-public.json` is the deployment's Public API, and
+`openapi-internal.json` is the **Domino Internal API**, where the `/v4/*` routes live.
+`$DOMINO_API_HOST/assets/public-api.json` is only a subset of the public one and omits
+governance, taxonomy, model monitoring, NetApp volumes and dataset file routes, so do not
+treat it as complete. Routes that exist only in the Internal API (`/v4/*`) are not part of
+the Public API and are not versioned for external use: prefer the `/api/...` equivalent,
+and where none exists label the call **internal API, may change between Domino versions**
+at the point of use. The
 verified divergence between the two targets is recorded in `coverage/COMPAT.md` (maintainers’ audit workspace, not yet in this repo).
 
 Nothing about versions goes in `description`; it is loaded for every skill on every turn
