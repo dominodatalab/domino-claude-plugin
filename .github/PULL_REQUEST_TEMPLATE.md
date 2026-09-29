@@ -82,7 +82,7 @@ Skill format:
 
 Release mechanics:
 
-- [ ] `plugin.json` `version` is bumped to the next `YYYY.X.Y.N` (any change under `skills/`, `commands/`, `agents/`, `templates/`, `mcp-servers/`, `output-styles/` or `.mcp.json` requires it, or nothing ships to installed copies; `N` never reused; when the base branch is `release-X.Y`, the version's `X.Y` must equal it). CI enforces this.
+- [ ] `plugin.json` `version` is bumped to the next `YYYY.X-Y.N` (any change under `skills/`, `commands/`, `agents/`, `templates/`, `mcp-servers/`, `output-styles/` or `.mcp.json` requires it, or nothing ships to installed copies; `N` never reused; when the base branch is `release-X.Y`, the version's `X.Y` must equal it). CI enforces this.
 - [ ] README skill table and counts updated for any added, renamed or removed component.
 - [ ] Eval case added or updated under `evals/` for the skill(s) touched (once the eval framework exists; until then, describe the manual test below).
 

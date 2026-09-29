@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # Enforce the plugin version scheme on a pull request.
 #
-#   plugin.json "version" = YYYY.X.Y.N        (e.g. 2026.6.3.1)
+#   plugin.json "version" = YYYY.X-Y.N        (e.g. 2026.6-3.1)
 #     YYYY  year of the release
-#     X.Y   Domino line the content is correct for (a floor: 6.3 = 6.3 and later, incl. Cloud)
+#     X-Y   Domino line the content is correct for, written with a hyphen so it reads at a glance
+#           (a floor: 6-3 = Domino 6.3 and later, incl. Cloud)
 #     N     skill release counter, monotonic within a Domino line, never reused, never reset by year
 #   git tag = release-<version>               (created by .github/workflows/tag-release.yml)
 #
 # Rules checked here (against the PR base ref):
-#   1. version matches ^[0-9]{4}\.[0-9]+\.[0-9]+\.[0-9]+$
+#   1. version matches ^[0-9]{4}\.[0-9]+-[0-9]+\.[0-9]+$ (no leading zeros)
 #   2. if any content path changed, version must differ from the base
 #   3. version must not already exist as a release-<version> tag (never reuse)
-#   4. on a release-X.Y base, the version's X.Y must equal the branch's X.Y
-#   5. if the base already used scheme versions on the same X.Y line, N must increase;
+#   4. on a release-X.Y base, the version's X-Y must equal the branch's X.Y
+#   5. if the base already used scheme versions on the same X-Y line, N must increase;
 #      the line (X.Y) and the year never go backwards, and the year is not in the future
 #
 # Usage: scripts/check-version.sh <base-ref>        e.g. scripts/check-version.sh origin/main
@@ -38,10 +39,10 @@ fi
 base_version="$(git show "$base_ref:$manifest" 2>/dev/null | jq -r '.version // empty' || true)"
 
 # 1. format
-if ! [[ "$head_version" =~ ^([0-9]{4})\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-  fail "version '$head_version' does not match YYYY.X.Y.N with no leading zeros (e.g. 2026.6.3.1)"
+if ! [[ "$head_version" =~ ^([0-9]{4})\.(0|[1-9][0-9]*)-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  fail "version '$head_version' does not match YYYY.X-Y.N with no leading zeros (e.g. 2026.6-3.1)"
 fi
-head_year="${BASH_REMATCH[1]}"; head_line="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"; head_n="${BASH_REMATCH[4]}"
+head_year="${BASH_REMATCH[1]}"; head_line="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"; head_n="${BASH_REMATCH[4]}"   # head_line is X.Y with a dot, to compare with release-X.Y
 
 # 2. bump required when content changed
 changed="$(git diff --name-only "$base_ref"...HEAD -- "${content_paths[@]}" || git diff --name-only "$base_ref" HEAD -- "${content_paths[@]}")"
@@ -74,8 +75,8 @@ fi
 this_year="$(date +%Y)"
 [ "$head_year" -le "$this_year" ] || fail "year $head_year is in the future (today is $this_year)"
 line_num() { local x="${1%%.*}" y="${1#*.}"; echo $(( x * 1000 + y )); }   # 6.3 -> 6003, 6.10 -> 6010
-if [[ "$base_version" =~ ^([0-9]{4})\.([0-9]+\.[0-9]+)\.([0-9]+)$ ]]; then
-  base_year="${BASH_REMATCH[1]}"; base_line="${BASH_REMATCH[2]}"; base_n="${BASH_REMATCH[3]}"
+if [[ "$base_version" =~ ^([0-9]{4})\.([0-9]+)-([0-9]+)\.([0-9]+)$ ]]; then
+  base_year="${BASH_REMATCH[1]}"; base_line="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"; base_n="${BASH_REMATCH[4]}"
   if [ "$head_version" != "$base_version" ]; then
     [ "$head_year" -ge "$base_year" ] || fail "year must not go backwards: base $base_version, head $head_version"
     if [ "$head_line" = "$base_line" ]; then

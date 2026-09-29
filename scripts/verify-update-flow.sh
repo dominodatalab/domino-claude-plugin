@@ -108,7 +108,7 @@ python3 - "$clone/.claude-plugin/plugin.json" <<'EOF'
 import json, sys, re
 p = sys.argv[1]; d = json.load(open(p)); v = d['version']
 # scheme version: bump N by 1000 so it can never collide with a real release; anything else: append a marker
-d['version'] = re.sub(r'\.(\d+)$', lambda m: '.' + str(int(m.group(1)) + 1000), v) if re.match(r'^\d{4}\.\d+\.\d+\.\d+$', v) else v + '.verify'
+d['version'] = re.sub(r'\.(\d+)$', lambda m: '.' + str(int(m.group(1)) + 1000), v) if re.match(r'^\d{4}\.\d+-\d+\.\d+$', v) else v + '.verify'
 json.dump(d, open(p, 'w'), indent=2)
 EOF
 bumped="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$clone/.claude-plugin/plugin.json")"

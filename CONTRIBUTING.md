@@ -274,15 +274,15 @@ string and re-reads it only when that string changes. Any change under `skills/`
 therefore bump `version`, or nothing reaches installed copies. CI (`scripts/check-version.sh`) rejects a PR
 that changes those paths without a bump.
 
-The version is **`YYYY.X.Y.N`**, for example `2026.6.3.1`:
+The version is **`YYYY.X-Y.N`**, for example `2026.6-3.1`:
 
 | Part | Meaning |
 |---|---|
 | `YYYY` | Year of the release. |
-| `X.Y` | The Domino line the content is correct for, as a **floor**: `6.3` means Domino 6.3 and later, including Domino Cloud. `main` carries the current floor. |
-| `N` | Skill release counter. Increases with every release on that `X.Y` line, is never reused, and is **not** reset by the year (`2026.6.3.14` is followed by `2027.6.3.15`). |
+| `X-Y` | The Domino line the content is correct for, written with a hyphen so the four parts read at a glance (`6-3` is Domino 6.3), as a **floor**: `6.3` means Domino 6.3 and later, including Domino Cloud. `main` carries the current floor. |
+| `N` | Skill release counter. Increases with every release on that `X.Y` line, is never reused, and is **not** reset by the year (`2026.6-3.14` is followed by `2027.6-3.15`). |
 
-The git tag `release-YYYY.X.Y.N` is created automatically from the manifest on every push to
+The git tag `release-YYYY.X-Y.N` is created automatically from the manifest on every push to
 `main` or a `release-*` branch (`.github/workflows/tag-release.yml`), so tag and manifest
 always agree. Plugin version is independent of Domino's own version numbers; `X.Y` states
 compatibility, not identity.
@@ -294,18 +294,18 @@ Three things carry a version, and they are deliberately different:
 | Object | Form | Who reads it |
 |---|---|---|
 | Branch | `main`, `release-6.3`, `release-6.4` … | The Domino Standard Environment (DSE) update script, which runs at Workspace launch and resolves **by exact branch name**: `release-X.Y.Z`, then `release-X.Y`, then `main`, from the cluster's `DOMINO_VERSION`. Any other branch name is invisible to it. |
-| Tag | `release-YYYY.X.Y.N` | Humans, and admins pinning a Workspace to one release through the script's override argument (`DOMINO_CLAUDE_SKILLS_BRANCH`), which accepts a branch, tag or commit. |
-| `plugin.json` `version` | `YYYY.X.Y.N` | Claude Code, to decide whether an installed copy is stale. |
+| Tag | `release-YYYY.X-Y.N` | Humans, and admins pinning a Workspace to one release through the script's override argument (`DOMINO_CLAUDE_SKILLS_BRANCH`), which accepts a branch, tag or commit. |
+| `plugin.json` `version` | `YYYY.X-Y.N` | Claude Code, to decide whether an installed copy is stale. |
 
 Rules:
 
 - `main` is correct for every supported target (Domino 6.3 and Cloud today). Version-specific
-  behaviour is gated inside the skill, not by branch. `X.Y` in the version is the **floor** of
-  what the content is correct for, so `main` carries `YYYY.6.3.N` for as long as it is still
+  behaviour is gated inside the skill, not by branch. `X-Y` in the version is the **floor** of
+  what the content is correct for, so `main` carries `YYYY.6-3.N` for as long as it is still
   correct for 6.3, even after 6.4 ships.
 - A `release-X.Y` branch exists only once `main`'s floor has moved past `X.Y`. Until then a
   Domino `X.Y` cluster resolves to `main`, which is correct for it. When the floor moves (say
-  `main` drops 6.3 and becomes `YYYY.6.4.N`), cut `release-6.3` from the last `6.3` commit;
+  `main` drops 6.3 and becomes `YYYY.6-4.N`), cut `release-6.3` from the last `6.3` commit;
   it then receives cherry-picks only, its versions stay on the `6.3` line, and it is never
   created for a Domino version that has not shipped (Cloud runs ahead of self-managed and
   would freeze on it). This keeps one meaning for `X.Y`: the branch line and the floor are the
@@ -387,7 +387,7 @@ Reviewers will send back PRs with unticked required sections.
 2. Declare Domino version applicability and confirm both specs were checked (standard 7).
 3. For new or rewritten skill content, name the model used and tick the attestation
    (standard 8).
-4. Confirm no internal references (standard 9) and bump `plugin.json` to the next `YYYY.X.Y.N` (standard 10). CI fails the PR otherwise.
+4. Confirm no internal references (standard 9) and bump `plugin.json` to the next `YYYY.X-Y.N` (standard 10). CI fails the PR otherwise.
 5. Update the README skill table and counts for any added, renamed or removed component.
 6. Describe what you tested and against which deployment version.
 7. Request review from a maintainer. One approving review and passing checks are required
