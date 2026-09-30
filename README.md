@@ -232,7 +232,7 @@ Requires `uv` to be installed (see [Prerequisites](#prerequisites)).
 | `domino-model-monitoring` | Drift detection and model quality tracking |
 | `domino-flows` | Flyte-based workflow orchestration |
 | `domino-distributed-computing` | Spark, Ray, Dask cluster management |
-| `domino-ai-gateway` | LLM proxy for OpenAI, Bedrock, etc. |
+| `domino-llm-access` | Call LLMs from Domino: external providers via env-var keys, Domino-hosted vLLM endpoints (Host an LLM API), LLM Gateway 2.0, legacy AI Gateway on 6.3 |
 | `domino-launchers` | Parameterized web forms for self-service |
 | `domino-modeling-assistant` | MCP server for AI-assisted model development |
 | `domino-data-connectivity` | S3 Mountpoint, AWS IRSA, Azure credentials |
@@ -298,7 +298,7 @@ domino-claude-plugin/
 │   ├── model-monitoring/
 │   ├── flows/
 │   ├── distributed-computing/
-│   ├── ai-gateway/
+│   ├── domino-llm-access/
 │   ├── launchers/
 │   ├── modeling-assistant/
 │   ├── data-connectivity/
