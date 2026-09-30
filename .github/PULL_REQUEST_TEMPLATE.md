@@ -82,7 +82,7 @@ Skill format:
 
 Release mechanics:
 
-- [ ] `plugin.json` `version` is bumped to the next `YYYY.X-Y.N` (any change under `skills/`, `commands/`, `agents/`, `templates/`, `mcp-servers/`, `output-styles/` or `.mcp.json` requires it, or nothing ships to installed copies; `N` never reused; when the base branch is `release-X.Y`, the version's `X.Y` must equal it). CI enforces this.
+- [ ] `plugin.json` `version`: **unchanged** for a PR to `develop`; bumped to the next `YYYY.X-Y.N` only in the `develop` → `main` release PR or on a `release-X.Y` branch (`N` never reused; on `release-X.Y` the version's line must equal the branch). CI enforces both directions.
 - [ ] README skill table and counts updated for any added, renamed or removed component.
 - [ ] Eval case added or updated under `evals/` for the skill(s) touched (once the eval framework exists; until then, describe the manual test below).
 
@@ -95,7 +95,8 @@ N/A
 
 ### Branching and release
 
-- [ ] Base branch is `main`.
+- [ ] Base branch is `develop` (all skill, agent, command, template, MCP or output-style changes; version left unchanged).
+- [ ] Base branch is `main` because this is the `develop` → `main` release promotion (version bumped to the next `YYYY.X-Y.N`) or a repo-mechanics-only change.
 - [ ] This fix must also reach a `release-X.Y` branch (once one exists): note it here so a maintainer cherry-picks after merge (backport PRs target that branch and bump `N` on its line).
 
 ### Notes for reviewers

@@ -279,8 +279,10 @@ Claude Code copies a marketplace plugin into its cache under the `plugin.json` `
 string and re-reads it only when that string changes. Any change under `skills/`, `commands/`,
 `agents/`, `templates/`, `mcp-servers/`, `output-styles/`, `hooks/`, `bin/`, `workflows/`,
 `themes/`, `monitors/`, `.mcp.json`, `.lsp.json`, `settings.json` or `plugin.json` itself must
-therefore bump `version`, or nothing reaches installed copies. CI (`scripts/check-version.sh`) rejects a PR
-that changes those paths without a bump.
+therefore bump `version` **when it reaches `main`**, or nothing reaches installed copies.
+Feature PRs land on `develop` with the version untouched; the promotion PR from `develop` to
+`main` carries the bump. CI (`scripts/check-version.sh`) rejects a promotion without a bump
+and a `develop` PR with one.
 
 The version is **`YYYY.X-Y.N`**, for example `2026.6-3.1`:
 
@@ -296,6 +298,21 @@ always agree. Plugin version is independent of Domino's own version numbers; `X.
 compatibility, not identity.
 
 ## Release branches, tags and backports
+
+### Where PRs go
+
+| Change | Base branch | Version |
+|---|---|---|
+| Skills, agents, commands, templates, MCP server, output styles (any content) | **`develop`** | Unchanged. CI fails a PR to `develop` that touches `plugin.json` `version`. |
+| Release: promote `develop` to `main` | `main`, head `develop` | The one bump to the next `YYYY.X-Y.N`; CI requires it; the tag follows on merge. |
+| Repo mechanics only (`.github/`, `scripts/`, CONTRIBUTING, README) | `main` | Unchanged; no content paths, so no bump and no tag. |
+| Backport onto a `release-X.Y` branch | that branch | Bump `N` on that line. |
+
+`develop` is the integration branch: it batches content changes so that `main` receives one
+release per promotion instead of one per PR. Nothing resolves `develop`: the Anthropic
+marketplace pins `main` by commit and the DSE updater probes only `release-X.Y.Z`,
+`release-X.Y` and `main`. Never name an integration branch `release-*`; the updater would
+serve it to every matching cluster on the next Workspace launch.
 
 Three things carry a version, and they are deliberately different:
 
@@ -398,8 +415,10 @@ Reviewers will send back PRs with unticked required sections.
 4. Confirm no internal references (standard 9) and bump `plugin.json` to the next `YYYY.X-Y.N` (standard 10). CI fails the PR otherwise.
 5. Update the README skill table and counts for any added, renamed or removed component.
 6. Describe what you tested and against which deployment version.
-7. Request review from a maintainer. One approving review and passing checks are required
-   to merge. Note in the PR if the change must be cherry-picked to `release-6.3`.
+7. Target `develop` for content and `main` only for release promotions and repo mechanics
+   (see "Where PRs go"). One approving review, a code-owner review and the `version` check
+   are required to merge. Note in the PR if the change must be cherry-picked to a
+   `release-X.Y` branch.
 
 ## Reporting Issues
 
