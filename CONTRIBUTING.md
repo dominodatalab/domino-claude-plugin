@@ -102,9 +102,9 @@ skills: skill1, skill2
 
 ## Skill Authoring Standards
 
-These rules came out of PR #8 (NetApp Volumes skill) review. Skim them before
-authoring or editing a `SKILL.md`. An audit of existing skills against these
-rules lives in [SKILL_AUDIT.md](./SKILL_AUDIT.md).
+These rules came out of PR #8 (NetApp Volumes skill) review and the September 2026
+coverage audit. Skim them before authoring or editing a `SKILL.md`. `SKILL_AUDIT.md`
+(May 2026) predates most of them and is stale; do not rely on it.
 
 ### 1. Authenticate with the local token endpoint, not API keys
 
@@ -165,39 +165,38 @@ document the SDK. They should clearly mark which methods are still supported
 vs deprecated. All other skills should not pull `from domino import Domino`
 into their examples.
 
-### 4. Verify endpoints against live API docs before writing examples
+### 4. Verify endpoints against the API specs before writing examples
 
-Don't guess endpoints from memory. Use a two-tier approach:
+Don't guess endpoints from memory, and don't carry them forward from older skills. Sources,
+in order:
 
-**Check swagger first** for current endpoint paths and field names — the
-cluster swagger always reflects the installed version. Get the cluster URL from
-`$DOMINO_API_HOST`. Most endpoints are in the public API spec (no auth
-needed); governance, taxonomy, and netapp-volumes swagger docs require a
-bearer token from `localhost:8899/access-token`:
+1. **Published Public API specs, both supported targets.** A route must exist in the spec for
+   every Domino version the skill claims:
+   `https://docs.domino.ai/api-specs/6.3/public-api.json` and
+   `https://docs.domino.ai/api-specs/cloud/public-api.json`.
+2. **A deployment's own API reference** at `https://<domino-domain>/docs` (Scalar,
+   unauthenticated, available from Domino 6.3). It serves one OpenAPI document per service
+   under `/docs/openapi/`: `openapi-public.json` is that deployment's full Public API;
+   `openapi-internal.json` is the Domino Internal API (the `/v4/*` routes); governance,
+   taxonomy, model monitoring, NetApp volumes and dataset files each have their own file.
+   `$DOMINO_API_HOST/assets/public-api.json` is only a subset of the Public API and omits
+   those services; do not treat it as complete.
+3. **Product docs** on docs.domino.ai for workflow context and field meaning (`/cloud/...`
+   and `/6.3/...`; `https://docs.domino.ai/llms.txt` indexes every page, and any page is
+   readable as Markdown by appending `.md`).
 
 ```bash
-# Public API (no auth):
-curl "$DOMINO_API_HOST/assets/public-api.json"
-
-# Auth-required swagger (governance / netapp-volumes):
-# These services are NOT routed through $DOMINO_API_HOST (internal Kubernetes URL).
-# Derive the external cluster URL from the JWT iss claim — works in any workspace type.
-TOKEN=$(curl -s http://localhost:8899/access-token)
-CLUSTER_URL=$(echo $TOKEN | cut -d'.' -f2 | python3 -c "
-import sys, base64, json, re
-p = sys.stdin.read().strip()
-p += '=' * (-len(p) % 4)
-print(re.sub(r'/auth/realms/.*', '', json.loads(base64.b64decode(p))['iss']))
-")
-curl -H "Authorization: Bearer $TOKEN" "$CLUSTER_URL/<service>/swagger/doc.json"
+# Published spec, Cloud target (swap cloud for 6.3):
+curl -s https://docs.domino.ai/api-specs/cloud/public-api.json | jq '.paths | keys[]' | grep governance
+# A specific deployment's complete Public API and its per-service documents:
+curl -s https://<domino-domain>/docs/configuration.json | jq '.sources[] | {title, url}'
+curl -s https://<domino-domain>/docs/openapi/openapi-public.json | jq '.paths | keys | length'
 ```
 
-**Then check public docs** (`docs.dominodatalab.com/api_guide`) for workflow
-context, field explanations, and richer examples when the swagger schemas
-alone aren't sufficient.
-
-PR #8 caught a wrong jobs endpoint (`/api/jobs/v1/runs` → `/api/jobs/v1/jobs`)
-that had been carried forward from an older version.
+Do not derive hosts from the JWT `iss` claim, and do not cite `docs.dominodatalab.com`;
+those patterns are what earlier skills got wrong. PR #8 caught a wrong jobs endpoint
+(`/api/jobs/v1/runs` → `/api/jobs/v1/jobs`) carried forward from an older version; the
+2026 audit found invented routes in six more skills.
 
 ### 5. Smoke-test payloads against the live API
 
@@ -416,7 +415,8 @@ Reviewers will send back PRs with unticked required sections.
 5. Update the README skill table and counts for any added, renamed or removed component.
 6. Describe what you tested and against which deployment version.
 7. Target `develop` for content and `main` only for release promotions and repo mechanics
-   (see "Where PRs go"). One approving review, a code-owner review and the `version` check
+   (see "Where PRs go"). One approving review, a code-owner review where `.github/CODEOWNERS`
+   matches, and the `version` check
    are required to merge. Note in the PR if the change must be cherry-picked to a
    `release-X.Y` branch.
 
