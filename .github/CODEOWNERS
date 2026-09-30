@@ -47,7 +47,7 @@
 /skills/netapp-volumes/             @DDL-Theo-Linnemann @ddl-giuliocapolino
 
 # Knowledge management: tags and properties  (docs: core-concepts/knowledge-management)
-/skills/tags-and-properties/        @DDL-Theo-Linnemann @nelprin @ddl-giuliocapolino
+/skills/tags-and-properties/        @DDL-Theo-Linnemann @ddl-giuliocapolino
 
 # Projects, workspaces, flows, experiments, model deployment and monitoring
 # (docs: core-concepts/projects, core-concepts/workspaces, features/flows, features/development, features/models, features/model-deployment, features/monitoring)
@@ -62,5 +62,5 @@
 /skills/domino-governance/          @DDL-Theo-Linnemann @ddl-giuliocapolino
 
 # API, SDK and MCP server  (docs: reference/api, reference/python-sdk)
-/skills/python-sdk/                 @DDL-Theo-Linnemann @ddl-ebrown
-/mcp-servers/                       @DDL-Theo-Linnemann @ddl-ebrown
+/skills/python-sdk/                 @DDL-Theo-Linnemann @ddl-ebrown @ddl-bira-ignacio
+/mcp-servers/                       @DDL-Theo-Linnemann @ddl-ebrown @ddl-bira-ignacio
