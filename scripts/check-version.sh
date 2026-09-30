@@ -15,6 +15,8 @@
 #   4. on a release-X.Y base, the version's X-Y must equal the branch's X.Y
 #   5. if the base already used scheme versions on the same X-Y line, N must increase;
 #      the line (X.Y) and the year never go backwards, and the year is not in the future
+#   6. on the integration branch `develop`, the version must EQUAL the base: feature PRs do
+#      not mint releases; the develop -> main promotion PR carries the one bump
 #
 # Usage: scripts/check-version.sh <base-ref>        e.g. scripts/check-version.sh origin/main
 # Exit 0 = ok, 1 = violation, 2 = usage/tooling error.
@@ -43,6 +45,15 @@ if ! [[ "$head_version" =~ ^([0-9]{4})\.(0|[1-9][0-9]*)-(0|[1-9][0-9]*)\.(0|[1-9
   fail "version '$head_version' does not match YYYY.X-Y.N with no leading zeros (e.g. 2026.6-3.1)"
 fi
 head_year="${BASH_REMATCH[1]}"; head_line="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"; head_n="${BASH_REMATCH[4]}"   # head_line is X.Y with a dot, to compare with release-X.Y
+
+# 6. integration branch: no bumps here
+if [ "${base_ref#origin/}" = "develop" ]; then
+  if [ "$head_version" != "$base_version" ]; then
+    fail "develop is the integration branch and keeps the version frozen (base $base_version, head $head_version). Bump N only in the develop -> main release PR."
+  fi
+  note "ok: integration branch develop, version unchanged at $head_version"
+  exit 0
+fi
 
 # 2. bump required when content changed
 changed="$(git diff --name-only "$base_ref"...HEAD -- "${content_paths[@]}" || git diff --name-only "$base_ref" HEAD -- "${content_paths[@]}")"
