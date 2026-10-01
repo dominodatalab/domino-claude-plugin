@@ -1,5 +1,7 @@
 # Domino Models API
 
+For deployment lifecycle, registered-models v1/v2 split, and inference URL vs management API, read [domino-model-serving/SKILL.md](../domino-model-serving/SKILL.md) and [API-MODEL-SERVING.md](./API-MODEL-SERVING.md).
+
 ## Overview
 The Models API covers Model APIs (deployed endpoints), Model Deployments, and the Model Registry.
 
@@ -232,7 +234,7 @@ GET /api/modelServing/v1/modelDeployments/{deploymentId}/credentials
 
 ## Registered Models (Model Registry)
 
-List and register use `/api/registeredmodels/v2`. Get, update, versions, and modelapis use `/api/registeredmodels/v1/{modelName}`; `modelName` is the registered model name, not a UUID.
+List and register use `/api/registeredmodels/v2`. Get, update, versions, and modelapis use `/api/registeredmodels/v1/{modelName}`; `modelName` is the registered model name, not a UUID. See [API-MODEL-SERVING.md](./API-MODEL-SERVING.md).
 
 ### List Registered Models
 ```

@@ -20,6 +20,9 @@
 /CONTRIBUTING.md                    @DDL-Theo-Linnemann
 /README.md                          @DDL-Theo-Linnemann
 
+# Skills without a more specific rule below (last matching line wins for listed paths)
+/skills/                            @ddl-bira-ignacio
+
 # Agents, coding assistants, LLMs  (docs: features/agents, features/coding-assistants, features/llms)
 /skills/domino-llm-access/          @DDL-Theo-Linnemann @etanlightstone-domino
 /skills/ai-gateway/                 @DDL-Theo-Linnemann @etanlightstone-domino
