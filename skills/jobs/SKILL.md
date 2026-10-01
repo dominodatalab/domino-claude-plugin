@@ -120,6 +120,8 @@ bash pipeline.sh
 
 ### Creating a Scheduled Job
 
+#### Via Domino UI
+
 1. Go to **Scheduled Jobs** in your project
 2. Click **New Scheduled Job**
 3. Configure:
@@ -128,6 +130,64 @@ bash pipeline.sh
    - **Schedule**: Cron expression or preset
    - **Hardware Tier**: Resources to use
    - **Environment**: Compute environment
+
+#### Via REST API
+
+`POST /v4/projects/{projectId}/scheduledjobs`. Required IDs (`projectId`,
+your own `userId`) are pulled from the cluster; auth uses the local
+access-token endpoint Domino injects into every workspace and job.
+
+```bash
+TOKEN=$(curl -s http://localhost:8899/access-token)
+
+# Your user id — needed for scheduledByUserId below
+USER_ID=$(curl -s "$DOMINO_API_HOST/v4/users/self" \
+  -H "Authorization: Bearer $TOKEN" | python -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -s -X POST "$DOMINO_API_HOST/v4/projects/$DOMINO_PROJECT_ID/scheduledjobs" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "My scheduled job",
+    "command": "python my_script.py",
+    "schedule": {
+      "cronString": "0 0 5,10,14,20 * * ?",
+      "isCustom": true
+    },
+    "timezoneId": "UTC",
+    "isPaused": false,
+    "allowConcurrentExecution": false,
+    "hardwareTierIdentifier": "small-k8s",
+    "overrideEnvironmentId": "<environment-id>",
+    "environmentRevisionSpec": "ActiveRevision",
+    "scheduledByUserId": "'"$USER_ID"'",
+    "notifyOnCompleteEmailAddresses": []
+  }'
+```
+
+**Required fields** (`NewScheduledJobDto` — confirm against the cluster
+swagger if anything below looks off, see *API Reference* below):
+
+| Field | Description |
+|---|---|
+| `title` | Display name for the scheduled job |
+| `command` | Script or command to run |
+| `schedule.cronString` | 6-field Domino cron (see *Cron Expression Format* below) |
+| `schedule.isCustom` | `true` for a custom cron string |
+| `timezoneId` | e.g. `"UTC"` or `"Europe/London"` |
+| `isPaused` | `false` to activate immediately |
+| `allowConcurrentExecution` | `false` to prevent overlapping runs |
+| `hardwareTierIdentifier` | Hardware tier ID (e.g. `"small-k8s"`) |
+| `overrideEnvironmentId` | Environment ID to run under |
+| `environmentRevisionSpec` | `"ActiveRevision"` or `"LatestRevision"` |
+| `scheduledByUserId` | User ID from `GET /v4/users/self` |
+| `notifyOnCompleteEmailAddresses` | Array of emails, or `[]` |
+
+> **Heads-up:** `$DOMINO_API_HOST` is the internal nucleus URL that Domino
+> injects into workspaces and jobs — the access-token endpoint above
+> returns a token valid for this host. If you're calling from outside a
+> Domino runtime, replace `$DOMINO_API_HOST` with your external Domino
+> hostname.
 
 ### Schedule Examples
 
