@@ -438,26 +438,17 @@ For comprehensive REST API documentation, see these specialized guides:
 | [API-JOBS.md](API-JOBS.md) | Jobs, scheduled jobs, logs, tags |
 | [API-DATASETS.md](API-DATASETS.md) | Datasets, snapshots, tags, grants |
 | [API-MODELS.md](API-MODELS.md) | Model APIs, deployments, registry |
+| [API-MODEL-SERVING.md](API-MODEL-SERVING.md) | Lifecycle, v1/v2 registry split, invoke vs management |
 | [API-ENVIRONMENTS.md](API-ENVIRONMENTS.md) | Environments, revisions, Dockerfile |
-| [API-APPS.md](API-APPS.md) | Apps, versions, instances, logs |
+| [API-APPS.md](API-APPS.md) | Apps endpoint catalog (see [apps/API-APPS.md](../apps/API-APPS.md) for v1 automation) |
 | [API-ADMIN.md](API-ADMIN.md) | Users, orgs, hardware tiers, data sources |
 | [API-REFERENCE.md](API-REFERENCE.md) | Complete endpoint reference |
 
 ## Documentation Reference
 
-Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+OpenAPI and route discovery: [API-SPECS.md](../domino-api-intro/API-SPECS.md).
 
-**Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
-
-Fetch the swagger spec:
-```bash
-# No authentication required for the public API spec
-curl "$DOMINO_API_HOST/assets/public-api.json"
-# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
-```
-
-**Public docs (workflow context and field explanations):**
-- [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)
-- [REST API Reference](https://docs.dominodatalab.com/en/latest/api_guide/8c929e/domino-platform-api-reference/)
-- [python-domino Library](https://docs.dominodatalab.com/en/latest/api_guide/c5ef26/the-python-domino-library/)
+**Product docs:**
+- [Domino API authentication](https://docs.domino.ai/cloud/reference/api/domino-api-authentication)
+- [python-domino Library](https://docs.domino.ai/cloud/reference/python-sdk/python-wrapper-for-domino-api)
 - [GitHub Repository](https://github.com/dominodatalab/python-domino)
