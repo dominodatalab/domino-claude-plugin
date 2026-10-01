@@ -1,0 +1,69 @@
+# Code owners for domino-claude-plugin.
+#
+# Sourced from cerebrotech/documentation/.github/CODEOWNERS (product-area owners per
+# docs section) and mapped onto this repo's directories. Only people with write access
+# to this repository can be owners here, so three docs-repo owners who have read access
+# only (ddl-subir-m, ddl-matthew-bonyak, ddl-dkelkhoff) are omitted; add them once they
+# are granted write access. The docs team (@cerebrotech/cx-docs) is a team in a
+# different GitHub org and cannot be referenced from dominodatalab/*; the docs
+# maintainer is listed by handle instead.
+#
+# GitHub semantics: the LAST matching line wins and REPLACES the owner list, so every
+# line carries its complete set of owners. Branch protection requires a code-owner
+# review, so a PR needs approval from someone on the matching line other than its author.
+
+# Default and repo mechanics (release scheme, CI, template, contribution standards)
+*                                   @DDL-Theo-Linnemann
+/.github/                           @DDL-Theo-Linnemann
+/scripts/                           @DDL-Theo-Linnemann
+/.claude-plugin/                    @DDL-Theo-Linnemann
+/CONTRIBUTING.md                    @DDL-Theo-Linnemann
+/README.md                          @DDL-Theo-Linnemann
+
+# Skills without a more specific rule below (last matching line wins for listed paths)
+/skills/                            @ddl-bira-ignacio
+
+# Agents, coding assistants, LLMs  (docs: features/agents, features/coding-assistants, features/llms)
+/skills/domino-llm-access/          @DDL-Theo-Linnemann @etanlightstone-domino
+/skills/ai-gateway/                 @DDL-Theo-Linnemann @etanlightstone-domino
+/skills/genai-tracing/              @DDL-Theo-Linnemann @etanlightstone-domino
+/skills/modeling-assistant/         @DDL-Theo-Linnemann @etanlightstone-domino
+/agents/                            @DDL-Theo-Linnemann @etanlightstone-domino
+
+# Apps, extensions, launchers  (docs: features/apps, features/extensions, features/launchers)
+/skills/apps/                       @DDL-Theo-Linnemann @ddl-ryan-connor
+/skills/domino-ui-bootstrap/        @DDL-Theo-Linnemann @ddl-ryan-connor
+/skills/domino-ui-design/           @DDL-Theo-Linnemann @ddl-ryan-connor
+/skills/launchers/                  @DDL-Theo-Linnemann @ddl-ryan-connor
+/templates/                         @DDL-Theo-Linnemann @ddl-ryan-connor
+/commands/                          @DDL-Theo-Linnemann @ddl-ryan-connor
+
+# Compute: environments, jobs, clusters and HPC  (docs: core-concepts/compute-environments, core-concepts/jobs, features/compute-clusters-hpc)
+/skills/environments/               @DDL-Theo-Linnemann @ddl-s-rodriguez
+/skills/jobs/                       @DDL-Theo-Linnemann @ddl-s-rodriguez
+/skills/distributed-computing/      @DDL-Theo-Linnemann @ddl-s-rodriguez
+
+# Data  (docs: core-concepts/data, admin/data-administration)
+/skills/datasets/                   @DDL-Theo-Linnemann @ddl-giuliocapolino
+/skills/data-connectivity/          @DDL-Theo-Linnemann @ddl-giuliocapolino
+/skills/domino-data-sdk/            @DDL-Theo-Linnemann @ddl-giuliocapolino
+/skills/netapp-volumes/             @DDL-Theo-Linnemann @ddl-giuliocapolino
+
+# Knowledge management: tags and properties  (docs: core-concepts/knowledge-management)
+/skills/tags-and-properties/        @DDL-Theo-Linnemann @ddl-giuliocapolino
+
+# Projects, workspaces, flows, experiments, model deployment and monitoring
+# (docs: core-concepts/projects, core-concepts/workspaces, features/flows, features/development, features/models, features/model-deployment, features/monitoring)
+/skills/projects/                   @DDL-Theo-Linnemann @ddl-rodrigo-fernandez
+/skills/workspaces/                 @DDL-Theo-Linnemann @ddl-rodrigo-fernandez
+/skills/flows/                      @DDL-Theo-Linnemann @ddl-rodrigo-fernandez
+/skills/experiment-tracking/        @DDL-Theo-Linnemann @ddl-rodrigo-fernandez
+/skills/model-endpoints/            @DDL-Theo-Linnemann @ddl-rodrigo-fernandez
+/skills/model-monitoring/           @DDL-Theo-Linnemann @ddl-rodrigo-fernandez
+
+# Governance  (docs: features/governance)
+/skills/domino-governance/          @DDL-Theo-Linnemann @ddl-giuliocapolino
+
+# API, SDK and MCP server  (docs: reference/api, reference/python-sdk)
+/skills/python-sdk/                 @DDL-Theo-Linnemann @ddl-ebrown @ddl-bira-ignacio
+/mcp-servers/                       @DDL-Theo-Linnemann @ddl-ebrown @ddl-bira-ignacio

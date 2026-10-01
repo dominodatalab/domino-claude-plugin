@@ -17,7 +17,14 @@ on:
       - "templates/**"
       - "mcp-servers/**"
       - "output-styles/**"
+      - "hooks/**"
+      - "bin/**"
+      - "workflows/**"
+      - "themes/**"
+      - "monitors/**"
       - ".mcp.json"
+      - ".lsp.json"
+      - "settings.json"
 
 permissions:
   contents: write

@@ -26,6 +26,8 @@ Train Model → Register → Deploy Endpoint → Monitor → Update Version
 
 ## Related Documentation
 
+- [domino-model-serving/SKILL.md](../domino-model-serving/SKILL.md) - REST deploy, registry v1/v2, lifecycle pitfalls
+- [API-MODEL-SERVING.md](../python-sdk/API-MODEL-SERVING.md) - modelServing routes and invoke split
 - [DEPLOY-ENDPOINT.md](./DEPLOY-ENDPOINT.md) - Creating model APIs
 - [MONITORING.md](./MONITORING.md) - Grafana, metrics, alerts
 - [SCALING.md](./SCALING.md) - GPU inference, Triton, scaling
@@ -118,4 +120,4 @@ When calling endpoints from apps:
 
 ## Documentation Links
 
-- Domino Model APIs: https://docs.dominodatalab.com/en/latest/user_guide/8dbc91/model-apis/
+OpenAPI and route discovery: [API-SPECS.md](../domino-api-intro/API-SPECS.md) (public routes section).

@@ -4,12 +4,22 @@
 The Environments API allows you to create, manage, and version Domino Compute Environments programmatically.
 
 ## Authentication
-```python
-import requests, os
 
-TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
-headers = {"Authorization": f"Bearer {TOKEN}"}
-base_url = os.environ["DOMINO_API_HOST"]
+https://docs.domino.ai/cloud/reference/api/domino-api-authentication
+
+See [SKILL.md](SKILL.md#authentication). Do not use API keys.
+
+```python
+import os
+import requests
+
+if os.environ.get("DOMINO_API_PROXY"):
+    base_url = os.environ["DOMINO_API_PROXY"].rstrip("/")
+    headers = {}
+else:
+    base_url = (os.environ.get("DOMINO_USER_HOST") or os.environ.get("DOMINO_API_HOST") or "").rstrip("/")
+    token = requests.get("http://localhost:8899/access-token").text.strip()
+    headers = {"Authorization": f"Bearer {token}"}
 ```
 
 ---
