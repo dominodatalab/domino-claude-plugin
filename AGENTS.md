@@ -123,3 +123,22 @@ that should load the skill and one neighbouring prompt that should not; check wh
   pin advances; it reaches Workspaces only after the image turns auto-update on or runs
   `plugin update` at launch.
 - `SKILL_AUDIT.md` is from May 2026 and stale; do not treat it as current.
+
+## Domino API, SDK, and platform skills
+
+Before you write or change Domino API, SDK, app, extension, or governance automation in this repo:
+
+1. Read **`skills/domino-api-intro/SKILL.md`** and apply its authentication rules.
+2. Open sibling files in that folder when needed:
+   - **`HOSTS.md`** for base URL and gateway vs public URL
+   - **`LIMITS.md`** for pagination and legacy API key guidance
+   - **`ERRORS.md`** for retries and known failure patterns
+   - **`SDK-MAP.md`** to pick a domain skill
+   - **`API-SPECS.md`** for OpenAPI files and route discovery
+3. Follow https://docs.domino.ai/cloud/reference/api/domino-api-authentication for all HTTP auth (proxy, access token, PAT, service account). Legacy user API keys are described as deprecated, never recommended.
+4. For API paths and pages, use [API-SPECS.md](skills/domino-api-intro/API-SPECS.md) (public routes section) before guessing routes.
+5. Then use the relevant skill under `skills/` (python-sdk, apps, domino-governance, domino-extensions, and others).
+
+This applies even when another Domino skill is already active. The intro skill takes precedence for auth, host, and retry rules.
+
+Product doc links in new material: full **`https://docs.domino.ai/...`** URLs only.
