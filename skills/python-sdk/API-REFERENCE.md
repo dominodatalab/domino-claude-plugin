@@ -561,52 +561,9 @@ GET /api/datasource/v1/audit
 
 ---
 
-## AI Gateway API
+## LLM access (AI Gateway, Host an LLM)
 
-### List Endpoints
-```
-GET /api/aigateway/v1/endpoints
-```
-
-### Create Endpoint
-```
-POST /api/aigateway/v1/endpoints
-```
-**Request Body:**
-```json
-{
-  "name": "openai-gpt4",
-  "provider": "openai",
-  "model": "gpt-4",
-  "providerApiKey": "sk-..."
-}
-```
-
-### Get Endpoint
-```
-GET /api/aigateway/v1/endpoints/{endpointName}
-```
-
-### Update Endpoint
-```
-PATCH /api/aigateway/v1/endpoints/{endpointName}
-```
-
-### Delete Endpoint
-```
-DELETE /api/aigateway/v1/endpoints/{endpointName}
-```
-
-### Endpoint Permissions
-```
-GET /api/aigateway/v1/endpoints/{endpointName}/permissions
-PATCH /api/aigateway/v1/endpoints/{endpointName}/permissions
-```
-
-### AI Gateway Audit
-```
-GET /api/aigateway/v1/audit
-```
+Moved to the `domino-llm-access` skill. Host-an-LLM endpoints (`/api/gen-ai/beta/endpoints`, present on Domino 6.3 and Cloud) are documented in `skills/domino-llm-access/HOST-AN-LLM-API.md`. The legacy AI Gateway routes (`/api/aigateway/v1/*`) exist only in the Domino 6.3 spec, only where an administrator enabled the gateway, and have been removed from Domino Cloud; they are documented in `skills/domino-llm-access/LEGACY-AI-GATEWAY.md`. Do not use them on Cloud.
 
 ---
 
