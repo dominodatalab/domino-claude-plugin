@@ -1,6 +1,6 @@
 name: Version check
 
-# Enforces the plugin version scheme (YYYY.X-Y.N) on pull requests.
+# Enforces the plugin version scheme (YYYY.DDD.N, e.g. 2026.603.3) on pull requests.
 # On the integration branch `develop` the version must stay equal to the base: releases are
 # minted only by the develop -> main promotion PR, which carries the single bump.
 # Any change under skills/, commands/, agents/, templates/, mcp-servers/, output-styles/,
