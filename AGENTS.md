@@ -40,9 +40,11 @@ layout from their own skills directories. Content here ships to customer environ
 | `main` | What ships. The Anthropic marketplace pins a commit on it; Domino Workspaces fall back to it | Changed only by the `develop` → `main` promotion PR, which bumps once and is tagged on merge |
 | `release-X.Y` | Snapshot for a Domino line, cut only when `main` stops being correct for it | Cherry-picks only; version stays on that line |
 
-- Version format is `YYYY.X-Y.N`, for example `2026.6-3.1`: year, Domino line as a floor
-  (`6-3` = 6.3 and later including Cloud), release counter. `N` never repeats and never resets.
-  CI creates the tag `release-<version>` on merge to `main` or `release-*`.
+- Version format is `YYYY.DDD.N`, for example `2026.603.3`: year, Domino line code as a floor
+  (`603` = 6.3 and later including Cloud; major followed by the two-digit minor, so `610` is
+  6.10), release counter. `N` never repeats and never resets. Three numeric parts so semver
+  tooling orders it. CI creates the tag `release-<version>` and a GitHub Release on merge to
+  `main` or `release-*`. Tags `release-2026.6-3.1` and `release-2026.6-3.2` predate this form.
 - Never create a branch named `release-*` for anything but a real snapshot. The Domino
   Workspace updater resolves `release-X.Y.Z`, `release-X.Y`, `main` by exact name and would
   serve an integration branch to every matching cluster on its next launch.

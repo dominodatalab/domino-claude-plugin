@@ -1,10 +1,11 @@
 name: Tag release
 
 # On every push to main or a release-X.Y branch, create the tag
-#   release-<plugin.json version>        e.g. release-2026.6-3.1
-# if it does not exist yet. The tag is derived from the manifest, so tag and manifest
-# always agree. Branch names stay release-X.Y because the Domino DSE update script
-# resolves them by exact name; tags are the per-release labels an admin can pin to.
+#   release-<plugin.json version>        e.g. release-2026.603.3
+# if it does not exist yet, then publish a GitHub Release from it. The tag is derived from
+# the manifest, so tag and manifest always agree. Branch names stay release-X.Y because the
+# Domino DSE update script resolves them by exact name; tags are the per-release labels an
+# admin can pin to, and the GitHub Release is what a marketplace tracking releases picks up.
 
 on:
   push:
@@ -41,11 +42,13 @@ jobs:
         run: |
           v="$(jq -r '.version // empty' .claude-plugin/plugin.json)"
           [ -n "$v" ] || { echo "::error::plugin.json has no version"; exit 1; }
-          [[ "$v" =~ ^[0-9]{4}\.([0-9]+)-([0-9]+)\.[0-9]+$ ]] || { echo "::error::version '$v' is not YYYY.X-Y.N"; exit 1; }
-          line="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-          if [[ "$GITHUB_REF_NAME" =~ ^release-([0-9]+\.[0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" != "$line" ]; then
-            echo "::error::branch $GITHUB_REF_NAME carries version $v; its X.Y must be ${BASH_REMATCH[1]}"; exit 1
+          [[ "$v" =~ ^[0-9]{4}\.([1-9][0-9]{2,})\.[0-9]+$ ]] || { echo "::error::version '$v' is not YYYY.DDD.N (e.g. 2026.603.3)"; exit 1; }
+          code="${BASH_REMATCH[1]}"
+          line="$(( code / 100 )).$(( code % 100 ))"
+          if [[ "$GITHUB_REF_NAME" =~ ^release-([0-9]+)\.([0-9]+)$ ]] && [ "$(( BASH_REMATCH[1] * 100 + BASH_REMATCH[2] ))" -ne "$code" ]; then
+            echo "::error::branch $GITHUB_REF_NAME carries version $v (Domino line $line); its line code must be $(( BASH_REMATCH[1] * 100 + BASH_REMATCH[2] ))"; exit 1
           fi
+          echo "line=$line" >> "$GITHUB_OUTPUT"
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "tag=release-$v" >> "$GITHUB_OUTPUT"
       - name: Create tag if absent
@@ -67,3 +70,18 @@ jobs:
           git tag -a "$TAG" -m "domino-claude-plugin $VERSION (${GITHUB_REF_NAME})" "$GITHUB_SHA"
           git push origin "refs/tags/$TAG"
           echo "created $TAG at $GITHUB_SHA"
+      - name: Publish GitHub Release
+        # A published (non-draft, non-prerelease) Release is what the Anthropic marketplace's
+        # releases-only tracking resolves; without one the entry HEAD-tracks main instead.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+          VERSION: ${{ steps.v.outputs.version }}
+          LINE: ${{ steps.v.outputs.line }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists; nothing to do"; exit 0
+          fi
+          gh release create "$TAG" --verify-tag --title "$VERSION" \
+            --notes "domino-claude-plugin $VERSION for Domino $LINE and later, including Domino Cloud. Install or update with \`claude plugin update dominodatalab@claude-plugins-official\`. Commit ${GITHUB_SHA}."
+          echo "published release $TAG"

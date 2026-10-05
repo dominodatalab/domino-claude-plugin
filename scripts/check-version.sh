@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 # Enforce the plugin version scheme on a pull request.
 #
-#   plugin.json "version" = YYYY.X-Y.N        (e.g. 2026.6-3.1)
+#   plugin.json "version" = YYYY.DDD.N          (e.g. 2026.603.3)
 #     YYYY  year of the release
-#     X-Y   Domino line the content is correct for, written with a hyphen so it reads at a glance
-#           (a floor: 6-3 = Domino 6.3 and later, incl. Cloud)
+#     DDD   Domino line code: the Domino major followed by the two-digit minor
+#           (603 = Domino 6.3, 610 = 6.10, 700 = 7.0). A floor: 603 = 6.3 and later, incl. Cloud.
+#           Three dotted numeric parts so semver-aware tooling parses and orders it correctly.
 #     N     skill release counter, monotonic within a Domino line, never reused, never reset by year
-#   git tag = release-<version>               (created by .github/workflows/tag-release.yml)
+#   git tag = release-<version>                 (created by .github/workflows/tag-release.yml)
+#
+#   Releases before 2026-10 used YYYY.X-Y.N (2026.6-3.1, 2026.6-3.2). Those tags stay; this
+#   script still reads that form on the base so the monotonic rules hold across the change.
 #
 # Rules checked here (against the PR base ref):
-#   1. version matches ^[0-9]{4}\.[0-9]+-[0-9]+\.[0-9]+$ (no leading zeros)
+#   1. version matches ^[0-9]{4}\.[1-9][0-9]{2,}\.(0|[1-9][0-9]*)$ (no leading zeros)
 #   2. if any content path changed, version must differ from the base
 #   3. version must not already exist as a release-<version> tag (never reuse)
-#   4. on a release-X.Y base, the version's X-Y must equal the branch's X.Y
-#   5. if the base already used scheme versions on the same X-Y line, N must increase;
-#      the line (X.Y) and the year never go backwards, and the year is not in the future
+#   4. on a release-X.Y base, the version's DDD must equal X*100+Y
+#   5. if the base already used scheme versions on the same line, N must increase;
+#      the line and the year never go backwards, and the year is not in the future
 #   6. on the integration branch `develop`, the version must EQUAL the base: feature PRs do
 #      not mint releases; the develop -> main promotion PR carries the one bump
 #
@@ -31,6 +35,19 @@ content_paths=(skills commands agents templates mcp-servers output-styles hooks 
 
 fail() { echo "::error::$*" >&2; exit 1; }
 note() { echo "$*"; }
+line_of() { echo "$(( $1 / 100 )).$(( $1 % 100 ))"; }   # 603 -> 6.3, 610 -> 6.10
+
+# Parse a version into year, line code, N. Accepts the current form and the pre-2026-10 form.
+# Sets p_year p_code p_n; returns 1 if the string is neither.
+parse_version() {
+  if [[ "$1" =~ ^([0-9]{4})\.([1-9][0-9]{2,})\.(0|[1-9][0-9]*)$ ]]; then
+    p_year="${BASH_REMATCH[1]}"; p_code="${BASH_REMATCH[2]}"; p_n="${BASH_REMATCH[3]}"
+  elif [[ "$1" =~ ^([0-9]{4})\.([0-9]+)-([0-9]+)\.([0-9]+)$ ]]; then
+    p_year="${BASH_REMATCH[1]}"; p_code=$(( BASH_REMATCH[2] * 100 + BASH_REMATCH[3] )); p_n="${BASH_REMATCH[4]}"
+  else
+    return 1
+  fi
+}
 
 head_version="$(jq -r '.version // empty' "$manifest")"
 [ -n "$head_version" ] || fail "$manifest has no version"
@@ -40,11 +57,12 @@ if ! git rev-parse --verify --quiet "$base_ref" >/dev/null; then
 fi
 base_version="$(git show "$base_ref:$manifest" 2>/dev/null | jq -r '.version // empty' || true)"
 
-# 1. format
-if ! [[ "$head_version" =~ ^([0-9]{4})\.(0|[1-9][0-9]*)-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-  fail "version '$head_version' does not match YYYY.X-Y.N with no leading zeros (e.g. 2026.6-3.1)"
+# 1. format (the current form only; the legacy form is accepted on the base, never on the head)
+if ! [[ "$head_version" =~ ^([0-9]{4})\.([1-9][0-9]{2,})\.(0|[1-9][0-9]*)$ ]]; then
+  fail "version '$head_version' does not match YYYY.DDD.N with no leading zeros (e.g. 2026.603.3; DDD = Domino major + two-digit minor)"
 fi
-head_year="${BASH_REMATCH[1]}"; head_line="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"; head_n="${BASH_REMATCH[4]}"   # head_line is X.Y with a dot, to compare with release-X.Y
+head_year="${BASH_REMATCH[1]}"; head_code="${BASH_REMATCH[2]}"; head_n="${BASH_REMATCH[3]}"
+head_line="$(line_of "$head_code")"
 
 # 6. integration branch: no bumps here
 if [ "${base_ref#origin/}" = "develop" ]; then
@@ -77,26 +95,25 @@ fi
 
 # 4. release-X.Y base must keep its line
 base_branch="${base_ref#origin/}"
-if [[ "$base_branch" =~ ^release-([0-9]+\.[0-9]+)$ ]]; then
-  branch_line="${BASH_REMATCH[1]}"
-  [ "$head_line" = "$branch_line" ] || fail "base branch $base_branch requires a $branch_line line, got '$head_version'"
+if [[ "$base_branch" =~ ^release-([0-9]+)\.([0-9]+)$ ]]; then
+  branch_code=$(( BASH_REMATCH[1] * 100 + BASH_REMATCH[2] ))
+  [ "$head_code" -eq "$branch_code" ] || fail "base branch $base_branch requires line code $branch_code ($(line_of "$branch_code")), got '$head_version' (line $head_line)"
 fi
 
-# 5. monotonic within the scheme, when the base is already on it
+# 5. monotonic within the scheme, when the base is already on it (either form)
 this_year="$(date +%Y)"
 [ "$head_year" -le "$this_year" ] || fail "year $head_year is in the future (today is $this_year)"
-line_num() { local x="${1%%.*}" y="${1#*.}"; echo $(( x * 1000 + y )); }   # 6.3 -> 6003, 6.10 -> 6010
-if [[ "$base_version" =~ ^([0-9]{4})\.([0-9]+)-([0-9]+)\.([0-9]+)$ ]]; then
-  base_year="${BASH_REMATCH[1]}"; base_line="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"; base_n="${BASH_REMATCH[4]}"
+if parse_version "$base_version"; then
+  base_year="$p_year"; base_code="$p_code"; base_n="$p_n"
   if [ "$head_version" != "$base_version" ]; then
     [ "$head_year" -ge "$base_year" ] || fail "year must not go backwards: base $base_version, head $head_version"
-    if [ "$head_line" = "$base_line" ]; then
+    if [ "$head_code" -eq "$base_code" ]; then
       [ "$head_n" -gt "$base_n" ] || fail "N must increase within the $head_line line: base $base_version, head $head_version"
     else
-      [ "$(line_num "$head_line")" -gt "$(line_num "$base_line")" ] || fail "the Domino line must not go backwards: base $base_version, head $head_version"
+      [ "$head_code" -gt "$base_code" ] || fail "the Domino line must not go backwards: base $base_version ($(line_of "$base_code")), head $head_version ($head_line)"
       [[ "$base_branch" =~ ^release- ]] && fail "a release-X.Y branch never changes line: base $base_version, head $head_version"
     fi
   fi
 fi
 
-note "ok: $manifest version $head_version"
+note "ok: $manifest version $head_version (Domino line $head_line, release $head_n)"
