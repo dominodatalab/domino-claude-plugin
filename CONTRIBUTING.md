@@ -102,9 +102,9 @@ skills: skill1, skill2
 
 ## Skill Authoring Standards
 
-These rules came out of PR #8 (NetApp Volumes skill) review. Skim them before
-authoring or editing a `SKILL.md`. An audit of existing skills against these
-rules lives in [SKILL_AUDIT.md](./SKILL_AUDIT.md).
+These rules came out of PR #8 (NetApp Volumes skill) review and the September 2026
+coverage audit. Skim them before authoring or editing a `SKILL.md`. `SKILL_AUDIT.md`
+(May 2026) predates most of them and is stale; do not rely on it.
 
 ### 1. Authenticate with the local token endpoint, not API keys
 
@@ -165,39 +165,38 @@ document the SDK. They should clearly mark which methods are still supported
 vs deprecated. All other skills should not pull `from domino import Domino`
 into their examples.
 
-### 4. Verify endpoints against live API docs before writing examples
+### 4. Verify endpoints against the API specs before writing examples
 
-Don't guess endpoints from memory. Use a two-tier approach:
+Don't guess endpoints from memory, and don't carry them forward from older skills. Sources,
+in order:
 
-**Check swagger first** for current endpoint paths and field names — the
-cluster swagger always reflects the installed version. Get the cluster URL from
-`$DOMINO_API_HOST`. Most endpoints are in the public API spec (no auth
-needed); governance, taxonomy, and netapp-volumes swagger docs require a
-bearer token from `localhost:8899/access-token`:
+1. **Published Public API specs, both supported targets.** A route must exist in the spec for
+   every Domino version the skill claims:
+   `https://docs.domino.ai/api-specs/6.3/public-api.json` and
+   `https://docs.domino.ai/api-specs/cloud/public-api.json`.
+2. **A deployment's own API reference** at `https://<domino-domain>/docs` (Scalar,
+   unauthenticated, available from Domino 6.3). It serves one OpenAPI document per service
+   under `/docs/openapi/`: `openapi-public.json` is that deployment's full Public API;
+   `openapi-internal.json` is the Domino Internal API (the `/v4/*` routes); governance,
+   taxonomy, model monitoring, NetApp volumes and dataset files each have their own file.
+   `$DOMINO_API_HOST/assets/public-api.json` is only a subset of the Public API and omits
+   those services; do not treat it as complete.
+3. **Product docs** on docs.domino.ai for workflow context and field meaning (`/cloud/...`
+   and `/6.3/...`; `https://docs.domino.ai/llms.txt` indexes every page, and any page is
+   readable as Markdown by appending `.md`).
 
 ```bash
-# Public API (no auth):
-curl "$DOMINO_API_HOST/assets/public-api.json"
-
-# Auth-required swagger (governance / netapp-volumes):
-# These services are NOT routed through $DOMINO_API_HOST (internal Kubernetes URL).
-# Derive the external cluster URL from the JWT iss claim — works in any workspace type.
-TOKEN=$(curl -s http://localhost:8899/access-token)
-CLUSTER_URL=$(echo $TOKEN | cut -d'.' -f2 | python3 -c "
-import sys, base64, json, re
-p = sys.stdin.read().strip()
-p += '=' * (-len(p) % 4)
-print(re.sub(r'/auth/realms/.*', '', json.loads(base64.b64decode(p))['iss']))
-")
-curl -H "Authorization: Bearer $TOKEN" "$CLUSTER_URL/<service>/swagger/doc.json"
+# Published spec, Cloud target (swap cloud for 6.3):
+curl -s https://docs.domino.ai/api-specs/cloud/public-api.json | jq '.paths | keys[]' | grep governance
+# A specific deployment's complete Public API and its per-service documents:
+curl -s https://<domino-domain>/docs/configuration.json | jq '.sources[] | {title, url}'
+curl -s https://<domino-domain>/docs/openapi/openapi-public.json | jq '.paths | keys | length'
 ```
 
-**Then check public docs** (`docs.dominodatalab.com/api_guide`) for workflow
-context, field explanations, and richer examples when the swagger schemas
-alone aren't sufficient.
-
-PR #8 caught a wrong jobs endpoint (`/api/jobs/v1/runs` → `/api/jobs/v1/jobs`)
-that had been carried forward from an older version.
+Do not derive hosts from the JWT `iss` claim, and do not cite `docs.dominodatalab.com`;
+those patterns are what earlier skills got wrong. PR #8 caught a wrong jobs endpoint
+(`/api/jobs/v1/runs` → `/api/jobs/v1/jobs`) carried forward from an older version; the
+2026 audit found invented routes in six more skills.
 
 ### 5. Smoke-test payloads against the live API
 
@@ -284,18 +283,23 @@ Feature PRs land on `develop` with the version untouched; the promotion PR from 
 `main` carries the bump. CI (`scripts/check-version.sh`) rejects a promotion without a bump
 and a `develop` PR with one.
 
-The version is **`YYYY.X-Y.N`**, for example `2026.6-3.1`:
+The version is **`YYYY.DDD.N`**, for example `2026.603.3`:
 
 | Part | Meaning |
 |---|---|
 | `YYYY` | Year of the release. |
-| `X-Y` | The Domino line the content is correct for, written with a hyphen so the four parts read at a glance (`6-3` is Domino 6.3), as a **floor**: `6.3` means Domino 6.3 and later, including Domino Cloud. `main` carries the current floor. |
-| `N` | Skill release counter. Increases with every release on that `X.Y` line, is never reused, and is **not** reset by the year (`2026.6-3.14` is followed by `2027.6-3.15`). |
+| `DDD` | Domino line code: the Domino major followed by the **two-digit** minor (`603` is Domino 6.3, `610` is 6.10, `700` is 7.0). The line the content is correct for, as a **floor**: `603` means Domino 6.3 and later, including Domino Cloud. `main` carries the current floor. Two digits keep the code ordered as an integer past minor 9; the patch number is never encoded because the floor is a line. |
+| `N` | Skill release counter. Increases with every release on that line, is never reused, and is **not** reset by the year (`2026.603.14` is followed by `2027.603.15`). |
 
-The git tag `release-YYYY.X-Y.N` is created automatically from the manifest on every push to
-`main` or a `release-*` branch (`.github/workflows/tag-release.yml`), so tag and manifest
-always agree. Plugin version is independent of Domino's own version numbers; `X.Y` states
-compatibility, not identity.
+The git tag `release-YYYY.DDD.N` and a GitHub Release of the same name are created
+automatically from the manifest on every push to `main` or a `release-*` branch
+(`.github/workflows/tag-release.yml`), so tag, Release and manifest always agree. Plugin version
+is independent of Domino's own version numbers; `DDD` states compatibility, not identity.
+
+Three dotted numeric parts were chosen so that semver-aware tooling (marketplace bump bots,
+release sorting, other agent harnesses) parses and orders the version correctly. Releases before
+October 2026 used `YYYY.X-Y.N` (`2026.6-3.1`, `2026.6-3.2`); their tags stay and the counter
+continued from them, so `2026.603.3` followed `2026.6-3.2`.
 
 ## Release branches, tags and backports
 
@@ -304,7 +308,7 @@ compatibility, not identity.
 | Change | Base branch | Version |
 |---|---|---|
 | Skills, agents, commands, templates, MCP server, output styles (any content) | **`develop`** | Unchanged. CI fails a PR to `develop` that touches `plugin.json` `version`. |
-| Release: promote `develop` to `main` | `main`, head `develop` | The one bump to the next `YYYY.X-Y.N`; CI requires it; the tag follows on merge. |
+| Release: promote `develop` to `main` | `main`, head `develop` | The one bump to the next `YYYY.DDD.N`; CI requires it; the tag and Release follow on merge. |
 | Repo mechanics only (`.github/`, `scripts/`, CONTRIBUTING, README) | `main` | Unchanged; no content paths, so no bump and no tag. |
 | Backport onto a `release-X.Y` branch | that branch | Bump `N` on that line. |
 
@@ -319,24 +323,24 @@ Three things carry a version, and they are deliberately different:
 | Object | Form | Who reads it |
 |---|---|---|
 | Branch | `main`, `release-6.3`, `release-6.4` … | The Domino Standard Environment (DSE) update script, which runs at Workspace launch and resolves **by exact branch name**: `release-X.Y.Z`, then `release-X.Y`, then `main`, from the cluster's `DOMINO_VERSION`. Any other branch name is invisible to it. |
-| Tag | `release-YYYY.X-Y.N` | Humans, and admins pinning a Workspace to one release through the script's override argument (`DOMINO_CLAUDE_SKILLS_BRANCH`), which accepts a branch, tag or commit. |
-| `plugin.json` `version` | `YYYY.X-Y.N` | Claude Code, to decide whether an installed copy is stale. |
+| Tag and GitHub Release | `release-YYYY.DDD.N` | Humans, release-tracking marketplaces, and admins pinning a Workspace to one release through the script's override argument (`DOMINO_CLAUDE_SKILLS_BRANCH`), which accepts a branch, tag or commit. |
+| `plugin.json` `version` | `YYYY.DDD.N` | Claude Code, to decide whether an installed copy is stale. |
 
 Rules:
 
 - `main` is correct for every supported target (Domino 6.3 and Cloud today). Version-specific
-  behaviour is gated inside the skill, not by branch. `X-Y` in the version is the **floor** of
-  what the content is correct for, so `main` carries `YYYY.6-3.N` for as long as it is still
+  behaviour is gated inside the skill, not by branch. `DDD` in the version is the **floor** of
+  what the content is correct for, so `main` carries `YYYY.603.N` for as long as it is still
   correct for 6.3, even after 6.4 ships.
 - A `release-X.Y` branch exists only once `main`'s floor has moved past `X.Y`. Until then a
   Domino `X.Y` cluster resolves to `main`, which is correct for it. When the floor moves (say
-  `main` drops 6.3 and becomes `YYYY.6-4.N`), cut `release-6.3` from the last `6.3` commit;
+  `main` drops 6.3 and becomes `YYYY.604.N`), cut `release-6.3` from the last `603` commit;
   it then receives cherry-picks only, its versions stay on the `6.3` line, and it is never
   created for a Domino version that has not shipped (Cloud runs ahead of self-managed and
   would freeze on it). This keeps one meaning for `X.Y`: the branch line and the floor are the
   same number, and no two branches share a counter.
 - **Backport** = cherry-pick the fix onto `release-X.Y`, bump `N` on that line, open the PR
-  against the branch. CI checks that the version's `X.Y` equals the branch's. The tag follows
+  against the branch. CI checks that the version's `DDD` equals the branch's `X.Y`. The tag follows
   automatically on merge.
 - Never reuse a version string; a reused string points Claude at the old cached copy. A
   `git revert` of a content change is itself a content change and needs its own bump. Any edit
@@ -412,11 +416,12 @@ Reviewers will send back PRs with unticked required sections.
 2. Declare Domino version applicability and confirm both specs were checked (standard 7).
 3. For new or rewritten skill content, name the model used and tick the attestation
    (standard 8).
-4. Confirm no internal references (standard 9) and bump `plugin.json` to the next `YYYY.X-Y.N` (standard 10). CI fails the PR otherwise.
+4. Confirm no internal references (standard 9) and bump `plugin.json` to the next `YYYY.DDD.N` (standard 10). CI fails the PR otherwise.
 5. Update the README skill table and counts for any added, renamed or removed component.
 6. Describe what you tested and against which deployment version.
 7. Target `develop` for content and `main` only for release promotions and repo mechanics
-   (see "Where PRs go"). One approving review, a code-owner review and the `version` check
+   (see "Where PRs go"). One approving review, a code-owner review where `.github/CODEOWNERS`
+   matches, and the `version` check
    are required to merge. Note in the PR if the change must be cherry-picked to a
    `release-X.Y` branch.
 

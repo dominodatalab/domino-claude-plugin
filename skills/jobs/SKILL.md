@@ -139,6 +139,9 @@ bash pipeline.sh
 | First of month | `0 0 0 1 * ?` |
 
 ### Cron Expression Format
+
+Domino scheduled jobs use **Quartz** cron (six required fields, optional seventh year field; seconds first). This is not Unix five-field crontab. Use `?` in day-of-month or day-of-week when the other field is set. Field rules and special characters (`*`, `-`, `/`, `L`, `W`, `#`): [Quartz CronTrigger tutorial](https://www.quartz-scheduler.org/documentation/quartz-2.5.x/tutorials/crontrigger.html).
+
 ```
 ┌───────────── second (0-59)
 │ ┌───────────── minute (0-59)
@@ -298,16 +301,9 @@ domino.runs_stop(run_id)
 
 ## API Reference
 
-Before writing or verifying any API call, use the cluster swagger to confirm current endpoint paths and field names. Use public docs for workflow context and field explanations.
+Before writing or verifying any API call, confirm endpoint paths and field names in [API-SPECS.md](../domino-api-intro/API-SPECS.md) (use the **Public routes** section for `/api/jobs/…`; use **Internal routes** for legacy `/v4/jobs/…` and `/v4/runs/…`). Use public docs for workflow context and field explanations.
 
 **Get the cluster base URL:** `$DOMINO_API_HOST` (injected by Domino into every workspace, job, and app).
-
-Fetch the swagger spec:
-```bash
-# No authentication required for the public API spec
-curl "$DOMINO_API_HOST/assets/public-api.json"
-# Browser UI: $DOMINO_API_HOST/assets/lib/swagger-ui/index.html?url=/assets/public-api.json#/
-```
 
 **Public docs (workflow context and field explanations):**
 - [API Guide](https://docs.dominodatalab.com/en/latest/api_guide/f35c19/api-guide/)

@@ -1,15 +1,27 @@
 # Domino Apps API
 
+Agent-oriented v1 vs beta and publish chain: [apps/API-APPS.md](../apps/API-APPS.md). This file is a beta-heavy endpoint catalog; prefer v1 routes from that doc for new automation.
+
 ## Overview
 The Apps API allows you to create, manage, and deploy web applications in Domino.
 
 ## Authentication
-```python
-import requests, os
 
-TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
-headers = {"Authorization": f"Bearer {TOKEN}"}
-base_url = os.environ["DOMINO_API_HOST"]
+https://docs.domino.ai/cloud/reference/api/domino-api-authentication
+
+See [SKILL.md](SKILL.md#authentication). Do not use API keys.
+
+```python
+import os
+import requests
+
+if os.environ.get("DOMINO_API_PROXY"):
+    base_url = os.environ["DOMINO_API_PROXY"].rstrip("/")
+    headers = {}
+else:
+    base_url = (os.environ.get("DOMINO_USER_HOST") or os.environ.get("DOMINO_API_HOST") or "").rstrip("/")
+    token = requests.get("http://localhost:8899/access-token").text.strip()
+    headers = {"Authorization": f"Bearer {token}"}
 ```
 
 ---
@@ -323,12 +335,17 @@ Request access to a private app.
 ## Complete Workflow Example
 
 ```python
-import requests, os
+import os
+import requests
 import time
 
-TOKEN = requests.get("http://localhost:8899/access-token").text.strip()
-headers = {"Authorization": f"Bearer {TOKEN}"}
-base_url = os.environ["DOMINO_API_HOST"]
+if os.environ.get("DOMINO_API_PROXY"):
+    base_url = os.environ["DOMINO_API_PROXY"].rstrip("/")
+    headers = {}
+else:
+    base_url = (os.environ.get("DOMINO_USER_HOST") or os.environ.get("DOMINO_API_HOST") or "").rstrip("/")
+    token = requests.get("http://localhost:8899/access-token").text.strip()
+    headers = {"Authorization": f"Bearer {token}"}
 
 # 1. Create app
 response = requests.post(

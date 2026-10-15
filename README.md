@@ -120,9 +120,10 @@ source ~/.bashrc
 
 ### Versions and updates
 
-The plugin version is `YYYY.X-Y.N` (for example `2026.6-3.1`): the release year, the Domino
-line the content is correct for as a floor (`6.3` = Domino 6.3 and later, including Cloud), and
-a release counter. Each release is tagged `release-YYYY.X-Y.N`. Marketplace installs (Option 1
+The plugin version is `YYYY.DDD.N` (for example `2026.603.3`): the release year, the Domino
+line the content is correct for as a floor (`603` = Domino 6.3 and later, including Cloud; the
+major followed by the two-digit minor), and a release counter. Each release is tagged
+`release-YYYY.DDD.N` and published as a GitHub Release. Marketplace installs (Option 1
 and the Anthropic marketplace) are cached by that version string and update only when it
 changes; check what you have with `claude plugin list` and update with
 `claude plugin update <name>@<marketplace>`. See CONTRIBUTING.md "Release branches, tags and

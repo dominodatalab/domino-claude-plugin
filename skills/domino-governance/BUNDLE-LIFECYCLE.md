@@ -2,6 +2,8 @@
 
 This document explains how governance bundles progress through policy stages in Domino.
 
+Auth and `$BASE`: [SKILL.md Configuration](./SKILL.md#configuration) (proxy → in-run gateway + access-token → public URL + PAT on 404; use the base where `GET $BASE/policy-overviews` returns HTTP 200). Curl examples use `${TOKEN:+-H "Authorization: Bearer $TOKEN"}`; leave `TOKEN` unset only when step 1 (proxy) works.
+
 ## How Policies Define Stage Sequences
 
 A policy template defines an ordered sequence of stages that a model must pass through. A typical MRM policy might use stages like:
@@ -32,12 +34,11 @@ Policies with `enforceSequentialOrder: true` require stages to be completed in o
 ### Create the Bundle
 ```bash
 curl -X POST "$BASE/bundles" \
-  -H "Authorization: Bearer $TOKEN" \
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"} \
   -H "Content-Type: application/json" \
   -d '{
     "projectId": "your-project-id",
     "name": "My Model v1.0",
-    "description": "Description of the model being governed",
     "policyId": "policy-uuid"
   }'
 ```
@@ -63,7 +64,7 @@ After creating a bundle, inspect it to find the stage IDs:
 
 ```bash
 curl -s "$BASE/bundles/$BUNDLE_ID" \
-  -H "Authorization: Bearer $TOKEN"
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"}
 ```
 
 The response includes a `stages` array:
@@ -81,30 +82,37 @@ The response includes a `stages` array:
 
 **Important**: The bundle response does NOT include evidenceSet IDs. To get those, fetch the policy directly:
 ```bash
-curl -s "$BASE/policies/$POLICY_ID" -H "Authorization: Bearer $TOKEN"
+curl -s "$BASE/policies/$POLICY_ID" ${TOKEN:+-H "Authorization: Bearer $TOKEN"}
 ```
 
 ## Progressing Through Stages
 
-### Starting a Stage
-When you begin work on a stage:
+Stage **status** on the bundle (`currentStageInfo.status`) is `NotStarted`, `InProgress`, or `Done`. It is derived from results and approvals, not set with `PATCH .../stages/{stageId}`.
+
+### Assign a stage owner
+`PATCH /bundles/{bundleId}/stages/{stageId}` accepts **assignee** only:
 ```bash
 curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
-  -H "Authorization: Bearer $TOKEN" \
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"} \
   -H "Content-Type: application/json" \
-  -d '{"status": "In Progress"}'
+  -d '{"assignee": {"id": "user-uuid", "name": "username"}}'
 ```
 
-### Completing a Stage
-After all evidence is attached and questions answered:
+### Complete a stage and move on
+After evidence is submitted and approvals are recorded:
+
+1. `POST /rpc/publish-approval-event` with the appropriate `eventType` (for example `RequestApproved`). See [APPROVAL-GATE.md](./APPROVAL-GATE.md).
+2. When needed, set the primary stage name on the bundle:
 ```bash
-curl -X PATCH "$BASE/bundles/$BUNDLE_ID/stages/$STAGE_ID" \
-  -H "Authorization: Bearer $TOKEN" \
+curl -X PATCH "$BASE/bundles/$BUNDLE_ID" \
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"} \
   -H "Content-Type: application/json" \
-  -d '{"status": "Complete"}'
+  -d '{"stage": "Validation & Testing"}'
 ```
 
-If the policy enforces gating and required questions are unanswered, this may fail.
+Re-fetch the bundle and confirm `stage` (name string) or `currentStageInfo.status` changed. Do not use `{"status": "Complete"}` on the stage subresource; that field is not in the API.
+
+If the policy enforces gating and required questions are unanswered, advance steps may fail or leave the bundle non-compliant.
 
 ### Typical Stage Progression
 
@@ -127,7 +135,7 @@ Each stage has designated approver organizations. Approval typically requires a 
 At any point, inspect the current state:
 ```bash
 curl -s "$BASE/bundles/$BUNDLE_ID" \
-  -H "Authorization: Bearer $TOKEN"
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"}
 ```
 
 Look at:
@@ -142,7 +150,7 @@ Look at:
 To see all bundles:
 ```bash
 curl -s "$BASE/bundles?projectId=$PROJECT_ID" \
-  -H "Authorization: Bearer $TOKEN"
+  ${TOKEN:+-H "Authorization: Bearer $TOKEN"}
 ```
 
 This returns summaries of all bundles, useful for checking if a bundle already exists before creating a duplicate.
