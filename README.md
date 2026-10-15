@@ -1,3 +1,24 @@
+# This repository has moved to [dominodatalab/domino-ai-plugin](https://github.com/dominodatalab/domino-ai-plugin)
+
+> [!CAUTION]
+> **`domino-claude-plugin` is deprecated and receives no new releases.** The Domino plugin now
+> lives at **[github.com/dominodatalab/domino-ai-plugin](https://github.com/dominodatalab/domino-ai-plugin)**,
+> for Claude Code, Codex, Cursor, Gemini CLI and Antigravity. Install it, report issues and open
+> pull requests there. Issues and pull requests are closed here.
+>
+> **Switch an existing clone to the new repository** and start a new session:
+>
+> ```bash
+> P=~/.claude/marketplaces/domino/plugins/domino-claude-plugin   # or the path of your clone
+> git -C $P remote set-url origin https://github.com/dominodatalab/domino-ai-plugin.git
+> git -C $P fetch origin main
+> git -C $P checkout -B main origin/main
+> ```
+>
+> Every other install method: [Installation](https://github.com/dominodatalab/domino-ai-plugin#installation-claude-code).
+
+---
+
 # Domino Data Lab Plugin for Claude Code
 
 A comprehensive Claude Code plugin providing full coverage of the Domino Data Lab platform for AI-assisted development.
